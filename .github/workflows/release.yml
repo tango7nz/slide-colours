@@ -1,0 +1,50 @@
+name: Build and release
+
+# Runs when you push a version tag, e.g.  git tag v1.1.0 && git push origin v1.1.0
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # required for the workflow to create a Release
+
+jobs:
+  build:
+    runs-on: windows-latest   # WPF (net8.0-windows) must build on Windows
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish self-contained single-file exe
+        shell: pwsh
+        run: |
+          dotnet publish SlideColours/SlideColours.csproj `
+            -c Release -r win-x64 --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:DebugType=none `
+            -o dist-standalone
+
+      - name: Name the artifact after the tag
+        shell: pwsh
+        run: |
+          $asset = "SlideColours-$env:GITHUB_REF_NAME-win-x64.exe"
+          Copy-Item dist-standalone/SlideColours.exe $asset
+          "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create GitHub Release and upload the exe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            "$env:ASSET#SlideColours $env:GITHUB_REF_NAME (Windows x64, standalone)" `
+            --title "SlideColours $env:GITHUB_REF_NAME" `
+            --generate-notes
