@@ -1,0 +1,193 @@
+using System.IO.Ports;
+using System.Windows;
+using System.Windows.Controls;
+using SlideColours.Models;
+using SlideColours.Services;
+using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfComboBoxItem = System.Windows.Controls.ComboBoxItem;
+using WpfMessageBox = System.Windows.MessageBox;
+
+namespace SlideColours;
+
+public partial class SettingsWindow : Window
+{
+    private readonly AppSettings _settings;
+    private readonly LightingEngine _engine;
+    private readonly ProPresenterClient _client;
+    private bool _loaded;
+
+    public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client)
+    {
+        _settings = settings;
+        _engine = engine;
+        _client = client;
+
+        InitializeComponent();
+
+        HostBox.Text = settings.ProPresenterHost;
+        PortBox.Text = settings.ProPresenterPort.ToString();
+
+        SelectByTag(ProtocolBox, settings.Protocol);
+        TargetIpBox.Text = settings.TargetIp;
+        UniverseBox.Text = settings.Universe.ToString();
+        StartChannelBox.Text = settings.StartChannel.ToString();
+        DimmerCheck.IsChecked = settings.HasMasterDimmer;
+
+        foreach (var name in SerialPort.GetPortNames().Distinct().OrderBy(n => n))
+            ComPortBox.Items.Add(name);
+        ComPortBox.Text = settings.ComPort;
+
+        FadeBox.Text = settings.FadeMs.ToString();
+        BrightnessSlider.Value = settings.BrightnessPercent;
+        SaturationSlider.Value = settings.SaturationBoostPercent;
+        FullBrightnessCheck.IsChecked = settings.FullBrightnessColours;
+        SelectByTag(FallbackBox, settings.Fallback);
+        StartEnabledCheck.IsChecked = settings.StartEnabled;
+
+        _loaded = true;
+        UpdateSliderLabels();
+        UpdateProtocolFields();
+    }
+
+    private static void SelectByTag(WpfComboBox box, string tag)
+    {
+        foreach (WpfComboBoxItem item in box.Items)
+        {
+            if ((string)item.Tag == tag)
+            {
+                box.SelectedItem = item;
+                return;
+            }
+        }
+        box.SelectedIndex = 0;
+    }
+
+    private static string SelectedTag(WpfComboBox box) =>
+        (box.SelectedItem as WpfComboBoxItem)?.Tag as string ?? "";
+
+    private void ProtocolBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loaded)
+            UpdateProtocolFields();
+    }
+
+    private void UpdateProtocolFields()
+    {
+        bool serial = SelectedTag(ProtocolBox) == "enttec";
+        var network = serial ? Visibility.Collapsed : Visibility.Visible;
+        var com = serial ? Visibility.Visible : Visibility.Collapsed;
+
+        TargetIpLabel.Visibility = network;
+        TargetIpPanel.Visibility = network;
+        UniverseLabel.Visibility = network;
+        UniverseBox.Visibility = network;
+        ComPortLabel.Visibility = com;
+        ComPortBox.Visibility = com;
+    }
+
+    private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_loaded)
+            UpdateSliderLabels();
+    }
+
+    private void UpdateSliderLabels()
+    {
+        BrightnessValue.Text = $"{(int)BrightnessSlider.Value}%";
+        SaturationValue.Text = $"{(int)SaturationSlider.Value}%";
+    }
+
+    private bool Apply()
+    {
+        if (!int.TryParse(PortBox.Text.Trim(), out int port) || port < 1 || port > 65535)
+        {
+            WpfMessageBox.Show(this, "Port must be a number between 1 and 65535.", "Slide Colours");
+            return false;
+        }
+
+        string protocol = SelectedTag(ProtocolBox);
+
+        if (!int.TryParse(UniverseBox.Text.Trim(), out int universe))
+            universe = _settings.Universe;
+        if (protocol == "sacn" && universe < 1)
+        {
+            WpfMessageBox.Show(this, "sACN universes start at 1.", "Slide Colours");
+            return false;
+        }
+
+        if (!int.TryParse(StartChannelBox.Text.Trim(), out int startChannel) || startChannel < 1 || startChannel > 512)
+        {
+            WpfMessageBox.Show(this, "Start channel must be between 1 and 512.", "Slide Colours");
+            return false;
+        }
+
+        if (!int.TryParse(FadeBox.Text.Trim(), out int fadeMs) || fadeMs < 0)
+            fadeMs = _settings.FadeMs;
+
+        bool endpointChanged = _settings.ProPresenterHost != HostBox.Text.Trim()
+                            || _settings.ProPresenterPort != port;
+
+        _settings.ProPresenterHost = HostBox.Text.Trim();
+        _settings.ProPresenterPort = port;
+        _settings.Protocol = protocol;
+        _settings.TargetIp = TargetIpBox.Text.Trim();
+        _settings.Universe = universe;
+        _settings.StartChannel = startChannel;
+        _settings.HasMasterDimmer = DimmerCheck.IsChecked == true;
+        _settings.ComPort = ComPortBox.Text.Trim();
+        _settings.FadeMs = fadeMs;
+        _settings.BrightnessPercent = (int)BrightnessSlider.Value;
+        _settings.SaturationBoostPercent = (int)SaturationSlider.Value;
+        _settings.FullBrightnessColours = FullBrightnessCheck.IsChecked == true;
+        _settings.Fallback = SelectedTag(FallbackBox);
+        _settings.StartEnabled = StartEnabledCheck.IsChecked == true;
+
+        _settings.Save();
+        _engine.RefreshOutput();
+        if (endpointChanged)
+            _client.Reconnect();
+
+        return true;
+    }
+
+    private async void Scan_Click(object sender, RoutedEventArgs e)
+    {
+        ScanButton.IsEnabled = false;
+        object original = ScanButton.Content;
+        ScanButton.Content = "Scanning…";
+        try
+        {
+            var nodes = await ArtNetDiscovery.DiscoverAsync();
+            if (nodes.Count == 0)
+            {
+                WpfMessageBox.Show(this,
+                    "No DMX nodes responded to Art-Net discovery.\n\n" +
+                    "Check the node is powered on and on the same network, " +
+                    "or leave Target IP blank to broadcast.",
+                    "Slide Colours");
+                return;
+            }
+
+            var dialog = new DiscoveryWindow(nodes) { Owner = this };
+            if (dialog.ShowDialog() == true && dialog.SelectedIp != null)
+                TargetIpBox.Text = dialog.SelectedIp;
+        }
+        finally
+        {
+            ScanButton.Content = original;
+            ScanButton.IsEnabled = true;
+        }
+    }
+
+    private void Test_Click(object sender, RoutedEventArgs e)
+    {
+        if (Apply())
+            _engine.RunTestSweep();
+    }
+
+    private void Save_Click(object sender, RoutedEventArgs e)
+    {
+        if (Apply())
+            DialogResult = true;
+    }
+}

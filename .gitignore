@@ -1,0 +1,24 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+dist/
+dist-standalone/
+
+# .NET / Visual Studio
+*.user
+*.suo
+.vs/
+[Dd]ebug/
+[Rr]elease/
+[Xx]64/
+[Xx]86/
+*.dll
+*.exe
+*.pdb
+
+# Rider / VS Code
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
