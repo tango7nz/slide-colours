@@ -1,8 +1,10 @@
 # Slide Colours
 
-Matches your stage lighting to what's on screen. Slide Colours watches ProPresenter 7 on the
+Matches your stage lighting to what's on screen. Slide Colours watches ProPresenter on the
 local machine, extracts the dominant colour of each slide as it goes live, and streams that
 colour to your DMX rig — with a small floating on/off toggle you can park anywhere on screen.
+It also doubles as a dead-simple standalone DMX colour controller when you're not driving it
+from ProPresenter at all (see [Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
 
 ## Download
 
@@ -23,8 +25,9 @@ grab `SlideColours-vX.Y.Z-win-x64.exe` and double-click it. It's fully self-cont
 
 ## Requirements
 
-- Windows 10/11. The app needs the **.NET 8 Desktop Runtime** — either install it, or use the
-  self-contained build that bundles it (see [Deploying to another PC](#deploying-to-another-pc)).
+- Windows 10/11 (64-bit). The [downloadable release](#download) is self-contained and needs
+  nothing else installed. (Building it yourself framework-dependent instead needs the **.NET 8
+  Desktop Runtime** — see [Building from source](#building-from-source).)
 - **ProPresenter 7.9 or later** with the network API enabled:
   *ProPresenter → Preferences → Network → tick **Enable Network***, then note the **port** shown there.
 - A DMX route, one of:
@@ -34,7 +37,8 @@ grab `SlideColours-vX.Y.Z-win-x64.exe` and double-click it. It's fully self-cont
 
 ## Running it
 
-Run `dist\SlideColours.exe`. A small floating pill appears (top-right by default). From left to right:
+Launch **SlideColours** (the exe you downloaded). A small floating pill appears (top-right by
+default). From left to right:
 
 - **✕ Close** — quits the app.
 - **Cog** — opens *Settings…*.
@@ -57,6 +61,21 @@ Run `dist\SlideColours.exe`. A small floating pill appears (top-right by default
 - **Follow slide** (default) — the stage colour is extracted from each live slide.
 - **Manual** — left-clicking a favourite, or saving a colour from the picker, holds that exact
   colour and ignores slide changes until you press **Follow slide** again.
+
+## Using it as a plain DMX controller
+
+You don't need ProPresenter at all. Manual colour control talks straight to your DMX rig, so the
+app works on its own as a tiny always-on-top colour controller — handy for a static wash, quick
+colour checks, or venues that don't run ProPresenter:
+
+- Point it at your fixture once in **Settings** (protocol, universe, start channel — same as below).
+- **Left-click a favourite** to send that colour, or **right-click** one to pick any colour you like.
+  These drive the lights immediately; there's no slide involved.
+- Flip the **Output** toggle on to transmit, off to hand control back to your desk.
+
+The only thing that needs ProPresenter is the **Follow slide** button — it stays greyed out when
+ProPresenter isn't connected, but everything else keeps working. So you can install it purely as a
+set-and-forget RGB controller and never enable the network API.
 
 ## First-time setup
 
@@ -89,18 +108,17 @@ If they do, you're patched correctly.
 
 ## Deploying to another PC
 
-A clean, fully-updated Windows 11 does **not** include what this app needs — it's a **.NET 8**
-app, and Windows only ships with the unrelated **.NET Framework 4.8**. You have two choices:
+For almost everyone this just means: **download the self-contained exe from the
+[latest release](https://github.com/tango7nz/slide-colours/releases/latest) and copy that one file
+across.** It bundles the .NET 8 runtime, so it runs on a bare, clean Windows 10/11 with **nothing
+preinstalled** — ideal for a shared or locked-down machine like a church booth PC. To update it,
+replace the file with a newer release.
 
-- **`dist\SlideColours.exe`** (small, ~1 MB) needs the **.NET 8 Desktop Runtime (x64)** installed on
-  the target machine — a one-time [download from Microsoft](https://dotnet.microsoft.com/download/dotnet/8.0)
-  that then stays patched via Windows Update.
-- **`dist-standalone\SlideColours.exe`** (~150 MB) is fully self-contained — it bundles the runtime,
-  so it runs on a bare Windows 11 with **nothing preinstalled**. Just copy that one file across.
-  You update it by re-copying the file (it won't get runtime patches automatically).
-
-For a shared or locked-down machine (e.g. a church booth PC), the self-contained exe is usually the
-least hassle.
+Prefer a tiny (~1 MB) download instead? Build the *framework-dependent* variant yourself (see
+[Building from source](#building-from-source)). It needs the
+[.NET 8 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/8.0) installed on the
+target machine — Windows ships only the unrelated .NET Framework 4.8 — but then stays patched via
+Windows Update.
 
 ## Building from source
 
