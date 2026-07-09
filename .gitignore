@@ -3,6 +3,7 @@
 [Oo]bj/
 dist/
 dist-standalone/
+release-assets/
 
 # .NET / Visual Studio
 *.user
