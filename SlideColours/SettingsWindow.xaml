@@ -127,6 +127,11 @@
                           Content="Automatically check for updates on startup"/>
                 <TextBlock x:Name="UpdateStatusText" Margin="4,6,0,0" TextWrapping="Wrap"
                            Visibility="Collapsed"/>
+                <TextBlock x:Name="ReleaseNotesText" Margin="4,4,0,0" Visibility="Collapsed">
+                    <Hyperlink x:Name="ReleaseNotesLink" RequestNavigate="ReleaseNotes_RequestNavigate">
+                        View release notes
+                    </Hyperlink>
+                </TextBlock>
                 <DockPanel Margin="0,8,0,0">
                     <Button DockPanel.Dock="Left" x:Name="CheckUpdateButton" Content="Check for updates"
                             Padding="10,5" Click="CheckUpdate_Click"/>

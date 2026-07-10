@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Ports;
 using System.Windows;
 using System.Windows.Controls;
@@ -199,11 +200,30 @@ public partial class SettingsWindow : Window
             UpdateStatusText.Text = $"Version {info.Version.ToString(3)} is available.";
             UpdateStatusText.Visibility = Visibility.Visible;
             InstallUpdateButton.Visibility = Visibility.Visible;
+
+            bool hasNotes = Uri.TryCreate(info.ReleaseUrl, UriKind.Absolute, out var uri);
+            if (hasNotes)
+                ReleaseNotesLink.NavigateUri = uri;
+            ReleaseNotesText.Visibility = hasNotes ? Visibility.Visible : Visibility.Collapsed;
         }
         else
         {
             InstallUpdateButton.Visibility = Visibility.Collapsed;
+            ReleaseNotesText.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void ReleaseNotes_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch
+        {
+            // No default browser / launch blocked — nothing useful to do.
+        }
+        e.Handled = true;
     }
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
