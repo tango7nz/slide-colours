@@ -133,3 +133,16 @@ Fully self-contained single file (runs anywhere, no runtime install needed):
 ```powershell
 dotnet publish SlideColours\SlideColours.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:DebugType=none -o dist-standalone
 ```
+
+## Feedback
+
+Slide Colours is free for anyone to use — churches, venues, hobbyists, whoever finds it useful.
+If you *do* use it, I'd genuinely love to hear about it: what you're running it on, how it's
+working out, or anything you'd like it to do. There's no obligation at all — just drop me a line
+at **[hughburns@outlook.co.nz](mailto:hughburns@outlook.co.nz)**. Bug reports and ideas are also
+welcome via [GitHub issues](https://github.com/tango7nz/slide-colours/issues).
+
+## License
+
+Released under the [MIT License](LICENSE) — free to use, modify, and share, including
+commercially, with no warranty. © 2026 Hugh Burns.
