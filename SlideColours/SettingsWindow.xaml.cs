@@ -213,15 +213,16 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void ReleaseNotes_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
         try
         {
+            // Works for http(s) links (browser) and mailto: links (mail client).
             Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         }
         catch
         {
-            // No default browser / launch blocked — nothing useful to do.
+            // No default browser / mail client, or launch blocked — nothing useful to do.
         }
         e.Handled = true;
     }

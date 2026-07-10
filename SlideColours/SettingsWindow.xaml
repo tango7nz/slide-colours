@@ -128,7 +128,7 @@
                 <TextBlock x:Name="UpdateStatusText" Margin="4,6,0,0" TextWrapping="Wrap"
                            Visibility="Collapsed"/>
                 <TextBlock x:Name="ReleaseNotesText" Margin="4,4,0,0" Visibility="Collapsed">
-                    <Hyperlink x:Name="ReleaseNotesLink" RequestNavigate="ReleaseNotes_RequestNavigate">
+                    <Hyperlink x:Name="ReleaseNotesLink" RequestNavigate="Hyperlink_RequestNavigate">
                         View release notes
                     </Hyperlink>
                 </TextBlock>
@@ -143,6 +143,15 @@
 
         <CheckBox x:Name="StartEnabledCheck" Margin="4,12,0,0"
                   Content="Turn lighting control on when the app starts"/>
+
+        <TextBlock Margin="4,14,0,0" Foreground="Gray" FontSize="11" TextWrapping="Wrap">
+            Free &amp; open-source under the MIT license.<LineBreak/>
+            <Hyperlink NavigateUri="mailto:hughburns@outlook.co.nz?subject=Slide%20Colours%20feedback"
+                       RequestNavigate="Hyperlink_RequestNavigate">Send feedback</Hyperlink>
+            &#160;&#183;&#160;
+            <Hyperlink NavigateUri="https://lifechurch.nz/church-life/#giving"
+                       RequestNavigate="Hyperlink_RequestNavigate">Support our church's mission</Hyperlink>
+        </TextBlock>
 
         <DockPanel Margin="0,16,0,0">
             <Button DockPanel.Dock="Left" Content="Test DMX" Width="90" Padding="0,5" Click="Test_Click"

@@ -45,5 +45,6 @@ jobs:
           # file in place without its name going stale. The version lives in the tag/release.
           gh release create $env:GITHUB_REF_NAME `
             "dist-standalone/SlideColours.exe#SlideColours (Windows x64, standalone)" `
+            "LICENSE#License (MIT)" `
             --title "SlideColours $env:GITHUB_REF_NAME" `
             --generate-notes

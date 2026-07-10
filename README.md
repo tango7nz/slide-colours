@@ -142,6 +142,13 @@ working out, or anything you'd like it to do. There's no obligation at all — j
 at **[hughburns@outlook.co.nz](mailto:hughburns@outlook.co.nz)**. Bug reports and ideas are also
 welcome via [GitHub issues](https://github.com/tango7nz/slide-colours/issues).
 
+## Support this project
+
+Slide Colours is free, and always will be. If you find it useful and would like to give something
+back, you're welcome to make a small donation towards our church's mission:
+**<https://lifechurch.nz/church-life/#giving>**. It's entirely optional and there's no catch —
+just a thank-you if the app has helped your church.
+
 ## License
 
 Released under the [MIT License](LICENSE) — free to use, modify, and share, including
