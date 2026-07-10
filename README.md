@@ -9,7 +9,7 @@ from ProPresenter at all (see [Using it as a plain DMX controller](#using-it-as-
 ## Download
 
 **[⬇ Download the latest release](https://github.com/tango7nz/slide-colours/releases/latest)** —
-grab `SlideColours-vX.Y.Z-win-x64.exe` and double-click it. It's fully self-contained, so there's
+grab `SlideColours.exe` and double-click it. It's fully self-contained, so there's
 **nothing to install** (no .NET runtime needed) — just 64-bit Windows 10/11.
 
 > On first launch, Windows SmartScreen may warn about an unrecognised app (the exe is unsigned).

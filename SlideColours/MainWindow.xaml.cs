@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly AppSettings _settings;
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
+    private readonly UpdateService _update;
 
     private bool _connected;
     private bool _following = true;
@@ -24,15 +25,23 @@ public partial class MainWindow : Window
     private static readonly WpfBrush ModeMutedBrush = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0xB8, 0xC0));
     private static readonly WpfBrush ModeFaintBorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
 
-    public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client)
+    public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client, UpdateService update)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
+        _update = update;
 
         InitializeComponent();
         RestorePosition();
         BuildFavouriteButtons();
+
+        // Show the settings-cog dot if a startup check has already found an update, and keep
+        // watching in case the check completes after the window is up.
+        if (_update.Available != null)
+            UpdateBadge.Visibility = Visibility.Visible;
+        _update.UpdateAvailable += _ => Dispatcher.BeginInvoke(() =>
+            UpdateBadge.Visibility = Visibility.Visible);
 
         EnableToggle.IsChecked = _engine.Enabled;
         _following = _engine.FollowSlides;
@@ -254,7 +263,7 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings, _engine, _client) { Owner = this };
+        var dialog = new SettingsWindow(_settings, _engine, _client, _update) { Owner = this };
         dialog.ShowDialog();
     }
 

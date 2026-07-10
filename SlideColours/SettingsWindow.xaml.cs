@@ -14,15 +14,20 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
+    private readonly UpdateService _update;
     private bool _loaded;
 
-    public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client)
+    public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client, UpdateService update)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
+        _update = update;
 
         InitializeComponent();
+
+        VersionText.Text = $"Current version: {UpdateService.CurrentVersion.ToString(3)}";
+        ShowUpdateState(_update.Available);
 
         HostBox.Text = settings.ProPresenterHost;
         PortBox.Text = settings.ProPresenterPort.ToString();
@@ -183,6 +188,69 @@ public partial class SettingsWindow : Window
     {
         if (Apply())
             _engine.RunTestSweep();
+    }
+
+    private void ShowUpdateState(UpdateInfo? info)
+    {
+        if (info != null)
+        {
+            UpdateStatusText.Text = $"Version {info.Version.ToString(3)} is available.";
+            UpdateStatusText.Visibility = Visibility.Visible;
+            InstallUpdateButton.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            InstallUpdateButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdateButton.IsEnabled = false;
+        UpdateStatusText.Text = "Checking…";
+        UpdateStatusText.Visibility = Visibility.Visible;
+        try
+        {
+            var info = await _update.CheckAsync();
+            if (info != null)
+                ShowUpdateState(info);
+            else
+                UpdateStatusText.Text = "You're on the latest version.";
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        var info = _update.Available;
+        if (info == null)
+            return;
+
+        var confirm = WpfMessageBox.Show(this,
+            $"Download and install version {info.Version.ToString(3)}?\n\n" +
+            "Slide Colours will close and reopen. A copy of the current version is kept next to the app.",
+            "Slide Colours", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.OK)
+            return;
+
+        InstallUpdateButton.IsEnabled = false;
+        CheckUpdateButton.IsEnabled = false;
+        var progress = new Progress<double>(p => UpdateStatusText.Text = $"Downloading… {p:P0}");
+        try
+        {
+            await _update.DownloadAndApplyAsync(info, progress);
+            // The new exe has launched; close this instance so it can take over.
+            System.Windows.Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = $"Update failed: {ex.Message}";
+            InstallUpdateButton.IsEnabled = true;
+            CheckUpdateButton.IsEnabled = true;
+        }
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

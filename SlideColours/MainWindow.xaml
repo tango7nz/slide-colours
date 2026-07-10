@@ -19,10 +19,17 @@
                     Content="&#xE8BB;" FontSize="13" VerticalAlignment="Center" Margin="0,0,2,0"
                     Click="Close_Click" ToolTip="Close Slide Colours"/>
 
-            <!-- settings -->
-            <Button x:Name="SettingsButton" Style="{StaticResource IconButton}"
-                    Content="&#xE713;" VerticalAlignment="Center" Margin="0,0,4,0"
-                    Click="Settings_Click" ToolTip="Settings"/>
+            <!-- settings (with an "update available" dot) -->
+            <Grid VerticalAlignment="Center" Margin="0,0,4,0">
+                <Button x:Name="SettingsButton" Style="{StaticResource IconButton}"
+                        Content="&#xE713;" VerticalAlignment="Center"
+                        Click="Settings_Click" ToolTip="Settings"/>
+                <Ellipse x:Name="UpdateBadge" Width="9" Height="9"
+                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,1,0"
+                         Fill="#FF3A6FF0" Stroke="#F0202028" StrokeThickness="1.5"
+                         Visibility="Collapsed" IsHitTestVisible="False"
+                         ToolTip="An update is available — open Settings to install"/>
+            </Grid>
 
             <!-- favourite colours -->
             <WrapPanel x:Name="FavouritePanel" VerticalAlignment="Center"

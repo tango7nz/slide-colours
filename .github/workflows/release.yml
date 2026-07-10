@@ -25,26 +25,25 @@ jobs:
       - name: Publish self-contained single-file exe
         shell: pwsh
         run: |
+          # Stamp the assembly with the tag's version (v1.2.3 -> 1.2.3) so the built exe reports
+          # the same version the self-updater compares against.
+          $ver = $env:GITHUB_REF_NAME -replace '^v', ''
           dotnet publish SlideColours/SlideColours.csproj `
             -c Release -r win-x64 --self-contained true `
             /p:PublishSingleFile=true `
             /p:IncludeNativeLibrariesForSelfExtract=true `
             /p:DebugType=none `
+            /p:Version=$ver `
             -o dist-standalone
-
-      - name: Name the artifact after the tag
-        shell: pwsh
-        run: |
-          $asset = "SlideColours-$env:GITHUB_REF_NAME-win-x64.exe"
-          Copy-Item dist-standalone/SlideColours.exe $asset
-          "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Create GitHub Release and upload the exe
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
+          # The asset keeps a stable, version-less name so the self-updater can replace the running
+          # file in place without its name going stale. The version lives in the tag/release.
           gh release create $env:GITHUB_REF_NAME `
-            "$env:ASSET#SlideColours $env:GITHUB_REF_NAME (Windows x64, standalone)" `
+            "dist-standalone/SlideColours.exe#SlideColours (Windows x64, standalone)" `
             --title "SlideColours $env:GITHUB_REF_NAME" `
             --generate-notes

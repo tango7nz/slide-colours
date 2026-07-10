@@ -10,6 +10,7 @@ public partial class App : System.Windows.Application
     private AppSettings _settings = null!;
     private LightingEngine _engine = null!;
     private ProPresenterClient _client = null!;
+    private UpdateService _update = null!;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -29,8 +30,14 @@ public partial class App : System.Windows.Application
         _client.SlideCleared += _engine.OnSlideCleared;
         _ = _client.RunAsync(_cts.Token);
 
-        MainWindow = new MainWindow(_settings, _engine, _client);
+        _update = new UpdateService();
+
+        MainWindow = new MainWindow(_settings, _engine, _client, _update);
         MainWindow.Show();
+
+        // Check for a new version in the background; the window shows a dot on the settings cog
+        // if one is found. Never blocks startup and never surfaces errors here.
+        _ = _update.CheckAsync(_cts.Token);
     }
 
     protected override void OnExit(ExitEventArgs e)
