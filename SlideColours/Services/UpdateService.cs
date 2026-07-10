@@ -36,7 +36,9 @@ public sealed class UpdateService
 
     private static HttpClient CreateClient()
     {
-        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        // No global timeout: the self-contained exe is ~150 MB and a short timeout would abort the
+        // download mid-stream. Each operation sets its own deadline via a linked CancellationToken.
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         // GitHub rejects API requests that don't send a User-Agent.
         http.DefaultRequestHeaders.UserAgent.ParseAdd("SlideColours-Updater");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
@@ -51,8 +53,12 @@ public sealed class UpdateService
     {
         try
         {
-            await using var stream = await Http.GetStreamAsync(LatestReleaseUrl, ct);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            // The metadata request is tiny — hold it to a short deadline.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+            await using var stream = await Http.GetStreamAsync(LatestReleaseUrl, timeout.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token);
             var root = doc.RootElement;
 
             string tag = root.GetProperty("tag_name").GetString() ?? "";
@@ -140,19 +146,25 @@ public sealed class UpdateService
     private static async Task DownloadToFileAsync(string url, string path,
         IProgress<double>? progress, CancellationToken ct)
     {
-        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        // Generous ceiling for a large download on a slow link; still bounded so a stalled
+        // connection can't hang forever.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromMinutes(15));
+        var token = timeout.Token;
+
+        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
         response.EnsureSuccessStatusCode();
 
         long? total = response.Content.Headers.ContentLength;
-        await using var src = await response.Content.ReadAsStreamAsync(ct);
+        await using var src = await response.Content.ReadAsStreamAsync(token);
         await using var dst = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
 
         var buffer = new byte[81920];
         long read = 0;
         int n;
-        while ((n = await src.ReadAsync(buffer, ct)) > 0)
+        while ((n = await src.ReadAsync(buffer, token)) > 0)
         {
-            await dst.WriteAsync(buffer.AsMemory(0, n), ct);
+            await dst.WriteAsync(buffer.AsMemory(0, n), token);
             read += n;
             if (total is > 0)
                 progress?.Report((double)read / total.Value);
