@@ -147,7 +147,7 @@ welcome via [GitHub issues](https://github.com/tango7nz/slide-colours/issues).
 Slide Colours is free, and always will be. If you find it useful and would like to give something
 back, you're welcome to make a small donation towards our church's mission:
 **<https://lifechurch.nz/church-life/#giving>**. It's entirely optional and there's no catch —
-just a thank-you if the app has helped your church.
+just a thank-you if you've found it useful.
 
 ## License
 
