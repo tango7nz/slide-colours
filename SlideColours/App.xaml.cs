@@ -35,9 +35,11 @@ public partial class App : System.Windows.Application
         MainWindow = new MainWindow(_settings, _engine, _client, _update);
         MainWindow.Show();
 
-        // Check for a new version in the background; the window shows a dot on the settings cog
-        // if one is found. Never blocks startup and never surfaces errors here.
-        _ = _update.CheckAsync(_cts.Token);
+        // Check for a new version in the background (unless the user turned this off); the window
+        // shows a dot on the settings cog if one is found. Never blocks startup, never surfaces
+        // errors here. The Settings "Check for updates" button still works regardless.
+        if (_settings.AutoCheckForUpdates)
+            _ = _update.CheckAsync(_cts.Token);
     }
 
     protected override void OnExit(ExitEventArgs e)

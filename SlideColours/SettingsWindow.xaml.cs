@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
 
         VersionText.Text = $"Current version: {UpdateService.CurrentVersion.ToString(3)}";
+        AutoCheckUpdatesCheck.IsChecked = settings.AutoCheckForUpdates;
         ShowUpdateState(_update.Available);
 
         HostBox.Text = settings.ProPresenterHost;
@@ -146,6 +147,7 @@ public partial class SettingsWindow : Window
         _settings.FullBrightnessColours = FullBrightnessCheck.IsChecked == true;
         _settings.Fallback = SelectedTag(FallbackBox);
         _settings.StartEnabled = StartEnabledCheck.IsChecked == true;
+        _settings.AutoCheckForUpdates = AutoCheckUpdatesCheck.IsChecked == true;
 
         _settings.Save();
         _engine.RefreshOutput();

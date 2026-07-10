@@ -27,6 +27,7 @@ public class AppSettings
 
     // App behaviour
     public bool StartEnabled { get; set; } = false;
+    public bool AutoCheckForUpdates { get; set; } = true; // check GitHub for a newer version on startup
     public double WindowLeft { get; set; } = double.NaN;
     public double WindowTop { get; set; } = double.NaN;
     public string[] FavouriteColours { get; set; } = new[]
