@@ -6,6 +6,11 @@ colour to your DMX rig — with a small floating on/off toggle you can park anyw
 It also doubles as a dead-simple standalone DMX colour controller when you're not driving it
 from ProPresenter at all (see [Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
 
+<p align="center">
+  <img src="docs/images/pill.png" width="760"
+       alt="The floating Slide Colours pill: close, settings cog, ten favourite-colour swatches, a Follow slide button, an Output toggle, and the current-colour circle">
+</p>
+
 ## Download
 
 **[⬇ Download the latest release](https://github.com/tango7nz/slide-colours/releases/latest)** —
@@ -80,6 +85,11 @@ set-and-forget RGB controller and never enable the network API.
 ## First-time setup
 
 Click the **cog** → **Settings…**
+
+<p align="center">
+  <img src="docs/images/settings.png" width="380"
+       alt="The Slide Colours Settings window: ProPresenter connection, DMX output, colour behaviour, and update options">
+</p>
 
 | Setting | Notes |
 |---|---|
