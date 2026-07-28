@@ -4,6 +4,17 @@ using WpfColor = System.Windows.Media.Color;
 
 namespace SlideColours.Services;
 
+/// <summary>Where the stage colour comes from.</summary>
+public enum ColourMode
+{
+    /// <summary>The dominant colour of each ProPresenter slide as it goes live.</summary>
+    Slide,
+    /// <summary>The colour of a display, sampled continuously — follows animated backgrounds.</summary>
+    Screen,
+    /// <summary>A colour the user picked; slides and the screen are ignored.</summary>
+    Manual,
+}
+
 /// <summary>
 /// Owns the DMX output: fades the current colour towards the target and, while enabled,
 /// transmits DMX frames ~30 times per second.
@@ -15,10 +26,18 @@ public class LightingEngine : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly byte[] _frame = new byte[512];
 
+    /// <summary>
+    /// Fade applied to screen-captured colours. The capture source has already smoothed them over
+    /// time, so this only needs to take the step out of consecutive frames — the user's fade time
+    /// is for slide changes and would lag hopelessly behind video.
+    /// </summary>
+    private const int ScreenFadeMs = 120;
+
     private IDmxOutput? _output;
     private DateTime _outputRetryAt = DateTime.MinValue;
     private double _curR, _curG, _curB;
     private double _tgtR, _tgtG, _tgtB;
+    private int _fadeMs;
     private DateTime _testUntil = DateTime.MinValue;
     private WpfColor _lastNotified;
     private bool _lastSending;
@@ -26,18 +45,22 @@ public class LightingEngine : IDisposable
 
     public bool Enabled { get; set; }
 
-    private volatile bool _followSlides = true;
-    /// <summary>True = colour follows the live slide; false = holding a manually chosen colour.</summary>
-    public bool FollowSlides => _followSlides;
+    private volatile ColourMode _mode = ColourMode.Slide;
+    /// <summary>Where the stage colour is currently coming from.</summary>
+    public ColourMode Mode => _mode;
 
     /// <summary>Fired (from a background thread) when the visible output colour or sending state changes.</summary>
     public event Action<WpfColor, bool>? OutputChanged;
     /// <summary>Fired when the DMX output fails or recovers; null = healthy.</summary>
     public event Action<string?>? OutputError;
-    /// <summary>Fired when the colour mode changes; true = following the live slide.</summary>
-    public event Action<bool>? ModeChanged;
+    /// <summary>Fired when the colour mode changes.</summary>
+    public event Action<ColourMode>? ModeChanged;
 
-    public LightingEngine(AppSettings settings) => _settings = settings;
+    public LightingEngine(AppSettings settings)
+    {
+        _settings = settings;
+        _fadeMs = settings.FadeMs;
+    }
 
     public void Start() => Task.Run(LoopAsync);
 
@@ -57,8 +80,8 @@ public class LightingEngine : IDisposable
 
     public void OnSlideImage(byte[] imageBytes)
     {
-        if (!_followSlides)
-            return; // holding a manual colour — ignore slide changes
+        if (_mode != ColourMode.Slide)
+            return; // following the screen, or holding a manual colour
 
         Task.Run(() =>
         {
@@ -66,15 +89,9 @@ public class LightingEngine : IDisposable
             {
                 WpfColor? dominant = ColorExtractor.Extract(imageBytes);
                 if (dominant is { } c)
-                {
-                    var shaped = ColorExtractor.ShapeForLighting(
-                        c, _settings.SaturationBoostPercent / 100.0, _settings.FullBrightnessColours);
-                    SetTarget(shaped.R, shaped.G, shaped.B);
-                }
+                    Apply(c, _settings.FadeMs);
                 else
-                {
-                    ApplyFallback();
-                }
+                    ApplyFallback(_settings.FadeMs);
             }
             catch
             {
@@ -85,44 +102,62 @@ public class LightingEngine : IDisposable
 
     public void OnSlideCleared()
     {
-        if (_followSlides)
-            ApplyFallback();
+        if (_mode == ColourMode.Slide)
+            ApplyFallback(_settings.FadeMs);
     }
 
-    /// <summary>Hold a manually chosen colour, ignoring slide changes until <see cref="SetFollowSlides"/> is called.</summary>
-    public void SetManualColour(System.Windows.Media.Color colour)
+    /// <summary>
+    /// A colour sampled from the captured display, already smoothed over time by
+    /// <see cref="ScreenColourSource"/>. Null means the screen carries no usable hue.
+    /// </summary>
+    public void OnScreenColour(WpfColor? colour)
     {
-        if (_followSlides)
-        {
-            _followSlides = false;
-            ModeChanged?.Invoke(false);
-        }
-        SetTarget(colour.R, colour.G, colour.B);
+        if (_mode != ColourMode.Screen)
+            return;
+
+        if (colour is { } c)
+            Apply(c, ScreenFadeMs);
+        else
+            ApplyFallback(ScreenFadeMs);
     }
 
-    /// <summary>Return to following the live slide; the colour updates on the next slide change.</summary>
-    public void SetFollowSlides()
+    /// <summary>Hold a manually chosen colour, ignoring slides and the screen until <see cref="SetMode"/> is called.</summary>
+    public void SetManualColour(WpfColor colour)
     {
-        if (!_followSlides)
-        {
-            _followSlides = true;
-            ModeChanged?.Invoke(true);
-        }
+        SetMode(ColourMode.Manual);
+        SetTarget(colour.R, colour.G, colour.B, _settings.FadeMs);
     }
 
-    private void ApplyFallback()
+    /// <summary>Switches where the stage colour comes from. The colour itself updates on the next sample.</summary>
+    public void SetMode(ColourMode mode)
+    {
+        if (_mode == mode)
+            return;
+        _mode = mode;
+        ModeChanged?.Invoke(mode);
+    }
+
+    private void Apply(WpfColor colour, int fadeMs)
+    {
+        var shaped = ColorExtractor.ShapeForLighting(
+            colour, _settings.SaturationBoostPercent / 100.0, _settings.FullBrightnessColours);
+        SetTarget(shaped.R, shaped.G, shaped.B, fadeMs);
+    }
+
+    private void ApplyFallback(int fadeMs)
     {
         switch (_settings.Fallback)
         {
-            case "off": SetTarget(0, 0, 0); break;
-            case "white": SetTarget(255, 214, 170); break; // warm white
-            default: break;                                // keep last colour
+            case "off": SetTarget(0, 0, 0, fadeMs); break;
+            case "white": SetTarget(255, 214, 170, fadeMs); break; // warm white
+            default: break;                                        // keep last colour
         }
     }
 
-    private void SetTarget(byte r, byte g, byte b)
+    private void SetTarget(byte r, byte g, byte b, int fadeMs)
     {
         _tgtR = r; _tgtG = g; _tgtB = b;
+        _fadeMs = fadeMs;
     }
 
     private async Task LoopAsync()
@@ -143,10 +178,10 @@ public class LightingEngine : IDisposable
                     // full rainbow every 8 seconds
                     double hue = now.TimeOfDay.TotalMilliseconds / 8000.0 % 1.0 * 360.0;
                     var c = ColorExtractor.HsvToRgb(hue, 1, 1);
-                    SetTarget(c.R, c.G, c.B);
+                    SetTarget(c.R, c.G, c.B, _settings.FadeMs);
                 }
 
-                double maxStep = 255.0 * dtMs / Math.Max(50, _settings.FadeMs);
+                double maxStep = 255.0 * dtMs / Math.Max(50, _fadeMs);
                 _curR = MoveToward(_curR, _tgtR, maxStep);
                 _curG = MoveToward(_curG, _tgtG, maxStep);
                 _curB = MoveToward(_curB, _tgtB, maxStep);

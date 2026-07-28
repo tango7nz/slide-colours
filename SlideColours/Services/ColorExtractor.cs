@@ -13,7 +13,7 @@ public static class ColorExtractor
 {
     private const int HueBins = 24;
 
-    /// <summary>Returns the dominant colour, or null if the slide is essentially colourless (black/white/grey).</summary>
+    /// <summary>Decodes an encoded image (e.g. a slide thumbnail) and returns its dominant colour.</summary>
     public static WpfColor? Extract(byte[] imageBytes)
     {
         var frame = BitmapFrame.Create(new MemoryStream(imageBytes),
@@ -25,7 +25,17 @@ public static class ColorExtractor
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
 
-        // Sample at most ~8000 pixels regardless of thumbnail size
+        return Extract(pixels, width, height, stride);
+    }
+
+    /// <summary>
+    /// Returns the dominant colour of a BGRA image, or null if it's essentially colourless
+    /// (black/white/grey). Takes raw pixels so live screen capture can call it per frame
+    /// without going through an image decoder.
+    /// </summary>
+    public static WpfColor? Extract(ReadOnlySpan<byte> pixels, int width, int height, int stride)
+    {
+        // Sample at most ~8000 pixels regardless of source size
         int step = Math.Max(1, (int)Math.Sqrt(width * (double)height / 8000));
 
         var binWeight = new double[HueBins];

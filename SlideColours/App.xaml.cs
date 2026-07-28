@@ -10,6 +10,7 @@ public partial class App : System.Windows.Application
     private AppSettings _settings = null!;
     private LightingEngine _engine = null!;
     private ProPresenterClient _client = null!;
+    private ScreenColourSource _screen = null!;
     private UpdateService _update = null!;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -30,9 +31,26 @@ public partial class App : System.Windows.Application
         _client.SlideCleared += _engine.OnSlideCleared;
         _ = _client.RunAsync(_cts.Token);
 
+        _screen = new ScreenColourSource(_settings);
+        _screen.ColourSampled += _engine.OnScreenColour;
+
+        // Capture only runs while the screen is actually the colour source, and the app comes back
+        // up in whichever mode it was left in.
+        _engine.ModeChanged += mode =>
+        {
+            _screen.SetActive(mode == ColourMode.Screen);
+            if (mode != ColourMode.Manual)
+            {
+                _settings.ColourSource = mode == ColourMode.Screen ? "screen" : "slide";
+                _settings.Save();
+            }
+        };
+        if (_settings.ColourSource == "screen")
+            _engine.SetMode(ColourMode.Screen);
+
         _update = new UpdateService();
 
-        MainWindow = new MainWindow(_settings, _engine, _client, _update);
+        MainWindow = new MainWindow(_settings, _engine, _client, _screen, _update);
         MainWindow.Show();
 
         // Check for a new version in the background (unless the user turned this off); the window
@@ -45,6 +63,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cts.Cancel();
+        _screen.Dispose();
         _engine.Dispose();
         _settings.Save();
         base.OnExit(e);

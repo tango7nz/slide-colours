@@ -18,6 +18,13 @@ public class AppSettings
     public bool HasMasterDimmer { get; set; } = false; // true = layout is Dimmer,R,G,B; false = R,G,B
     public string ComPort { get; set; } = "COM3";      // Enttec DMX USB Pro only
 
+    // Screen capture — colour sampled live from a display (the ProPresenter output), so that
+    // animated backgrounds drive the lights the way a TV backlight follows the picture.
+    public string ColourSource { get; set; } = "slide";  // slide | screen — last non-manual mode
+    public string CaptureDisplay { get; set; } = "";     // DXGI device name, blank = primary display
+    public int CaptureFps { get; set; } = 30;            // how often the display is sampled
+    public int CaptureSmoothingMs { get; set; } = 400;   // temporal smoothing of the captured colour
+
     // Colour behaviour
     public int FadeMs { get; set; } = 800;
     public int BrightnessPercent { get; set; } = 100;

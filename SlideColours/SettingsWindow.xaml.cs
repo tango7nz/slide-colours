@@ -15,14 +15,17 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
+    private readonly ScreenColourSource _screen;
     private readonly UpdateService _update;
     private bool _loaded;
 
-    public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client, UpdateService update)
+    public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
+        ScreenColourSource screen, UpdateService update)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
+        _screen = screen;
         _update = update;
 
         InitializeComponent();
@@ -44,6 +47,10 @@ public partial class SettingsWindow : Window
             ComPortBox.Items.Add(name);
         ComPortBox.Text = settings.ComPort;
 
+        PopulateDisplays();
+        SmoothingBox.Text = settings.CaptureSmoothingMs.ToString();
+        SelectByTag(CaptureFpsBox, settings.CaptureFps.ToString(), "30");
+
         FadeBox.Text = settings.FadeMs.ToString();
         BrightnessSlider.Value = settings.BrightnessPercent;
         SaturationSlider.Value = settings.SaturationBoostPercent;
@@ -56,7 +63,7 @@ public partial class SettingsWindow : Window
         UpdateProtocolFields();
     }
 
-    private static void SelectByTag(WpfComboBox box, string tag)
+    private static void SelectByTag(WpfComboBox box, string tag, string? fallbackTag = null)
     {
         foreach (WpfComboBoxItem item in box.Items)
         {
@@ -66,7 +73,33 @@ public partial class SettingsWindow : Window
                 return;
             }
         }
-        box.SelectedIndex = 0;
+        if (fallbackTag != null)
+            SelectByTag(box, fallbackTag);
+        else
+            box.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// Lists the displays DXGI can capture. A blank tag means "whichever is primary", so the
+    /// setting still works if monitors are re-arranged.
+    /// </summary>
+    private void PopulateDisplays()
+    {
+        CaptureDisplayBox.Items.Add(new WpfComboBoxItem { Tag = "", Content = "Main display (primary screen)" });
+
+        foreach (var display in DesktopDuplicator.List())
+            CaptureDisplayBox.Items.Add(new WpfComboBoxItem { Tag = display.DeviceName, Content = display.Label });
+
+        // A display saved earlier may be unplugged right now — keep it selectable rather than
+        // silently switching them back to the primary screen.
+        string saved = _settings.CaptureDisplay;
+        if (!string.IsNullOrWhiteSpace(saved)
+            && !CaptureDisplayBox.Items.Cast<WpfComboBoxItem>().Any(i => (string)i.Tag == saved))
+        {
+            CaptureDisplayBox.Items.Add(new WpfComboBoxItem { Tag = saved, Content = $"{saved} (not connected)" });
+        }
+
+        SelectByTag(CaptureDisplayBox, saved);
     }
 
     private static string SelectedTag(WpfComboBox box) =>
@@ -131,8 +164,14 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(FadeBox.Text.Trim(), out int fadeMs) || fadeMs < 0)
             fadeMs = _settings.FadeMs;
 
+        if (!int.TryParse(SmoothingBox.Text.Trim(), out int smoothingMs) || smoothingMs < 0)
+            smoothingMs = _settings.CaptureSmoothingMs;
+        if (!int.TryParse(SelectedTag(CaptureFpsBox), out int captureFps))
+            captureFps = _settings.CaptureFps;
+
         bool endpointChanged = _settings.ProPresenterHost != HostBox.Text.Trim()
                             || _settings.ProPresenterPort != port;
+        bool displayChanged = _settings.CaptureDisplay != SelectedTag(CaptureDisplayBox);
 
         _settings.ProPresenterHost = HostBox.Text.Trim();
         _settings.ProPresenterPort = port;
@@ -142,6 +181,9 @@ public partial class SettingsWindow : Window
         _settings.StartChannel = startChannel;
         _settings.HasMasterDimmer = DimmerCheck.IsChecked == true;
         _settings.ComPort = ComPortBox.Text.Trim();
+        _settings.CaptureDisplay = SelectedTag(CaptureDisplayBox);
+        _settings.CaptureSmoothingMs = smoothingMs;
+        _settings.CaptureFps = captureFps;
         _settings.FadeMs = fadeMs;
         _settings.BrightnessPercent = (int)BrightnessSlider.Value;
         _settings.SaturationBoostPercent = (int)SaturationSlider.Value;
@@ -154,6 +196,8 @@ public partial class SettingsWindow : Window
         _engine.RefreshOutput();
         if (endpointChanged)
             _client.Reconnect();
+        if (displayChanged)
+            _screen.Restart();
 
         return true;
     }

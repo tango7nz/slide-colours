@@ -1,14 +1,16 @@
 # Slide Colours
 
-Matches your stage lighting to what's on screen. Slide Colours watches ProPresenter on the
-local machine, extracts the dominant colour of each slide as it goes live, and streams that
-colour to your DMX rig — with a small floating on/off toggle you can park anywhere on screen.
-It also doubles as a dead-simple standalone DMX colour controller when you're not driving it
-from ProPresenter at all (see [Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
+Matches your stage lighting to what's on screen. Slide Colours takes the dominant colour of what
+ProPresenter is showing and streams it to your DMX rig — with a small floating on/off toggle you
+can park anywhere on screen. It can follow either **the live slide** or **a display**, the latter
+sampled many times a second so animated and video backgrounds drive the lights like a TV
+backlight. It also doubles as a dead-simple standalone DMX colour controller when you're not
+driving it from ProPresenter at all (see
+[Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
 
 <p align="center">
   <img src="docs/images/pill.png" width="760"
-       alt="The floating Slide Colours pill: close, settings cog, ten favourite-colour swatches, a Follow slide button, an Output toggle, and the current-colour circle">
+       alt="The floating Slide Colours pill: close, settings cog, ten favourite-colour swatches, Follow slide and Follow screen buttons, an Output toggle, and the current-colour circle">
 </p>
 
 ## Download
@@ -22,19 +24,34 @@ grab `SlideColours.exe` and double-click it. It's fully self-contained, so there
 
 ## How it works
 
+There are two ways to get the colour, and you switch between them on the pill:
+
+**Follow slide** — the original approach, and the lightest.
+
 1. Listens to ProPresenter's local HTTP API for slide changes (streaming, no polling).
 2. When the slide changes, fetches that slide's thumbnail and finds its dominant colour —
    biased towards vivid, saturated pixels so white lyric text and black backgrounds are ignored.
-3. Fades the stage colour smoothly to the new colour and transmits DMX ~30×/second while
-   the toggle is on. When toggled off, it stops transmitting so your lighting desk is back in charge.
+
+**Follow screen** — for animated backgrounds.
+
+1. Captures a display you choose (normally the one carrying the audience/main output) using
+   Windows' Desktop Duplication API, downscaling each frame on the GPU so only a few KB come
+   back to the CPU. It's event-driven, so a still slide costs nothing.
+2. Runs the same colour extraction on every frame, then smooths the result over time so the
+   lights glide with the picture instead of stepping between hues.
+
+Either way, the stage colour fades smoothly and DMX is transmitted ~30×/second while the toggle
+is on. When toggled off, it stops transmitting so your lighting desk is back in charge.
 
 ## Requirements
 
 - Windows 10/11 (64-bit). The [downloadable release](#download) is self-contained and needs
   nothing else installed. (Building it yourself framework-dependent instead needs the **.NET 8
   Desktop Runtime** — see [Building from source](#building-from-source).)
-- **ProPresenter 7.9 or later** with the network API enabled:
+- For **Follow slide**: **ProPresenter 7.9 or later** with the network API enabled:
   *ProPresenter → Preferences → Network → tick **Enable Network***, then note the **port** shown there.
+- For **Follow screen**: nothing extra — it uses a display already attached to this PC. (The
+  screen must be connected and awake; see [Good to know](#good-to-know).)
 - A DMX route, one of:
   - **Art-Net** node/gateway on the network (default)
   - **sACN (E1.31)** node on the network
@@ -51,10 +68,14 @@ default). From left to right:
   - **Left-click** to send that colour to the lights (this switches to *manual* mode — see below).
   - **Right-click** to edit that swatch: a colour picker opens seeded with its current colour, and
     saving stores the new colour in that slot.
-- **Follow slide** — the colour mode. When highlighted (blue), the stage colour tracks the live
-  slide. Picking a favourite (or a manual colour) holds that colour and dims this button; click it
-  again to go back to following the slide. It's **greyed out when ProPresenter isn't connected**
-  (hover it to see why) — that's also your connection indicator.
+- **Follow slide** — track the live slide. When highlighted (blue), the stage colour changes with
+  each new slide. It's **greyed out when ProPresenter isn't connected** (hover it to see why) —
+  that's also your connection indicator.
+- **Follow screen** — track a display continuously instead, so animated backgrounds and video
+  come through. Highlighted blue while active; hover it to see which display it's watching, or
+  why capture isn't working. Choose the display in **Settings**.
+- Picking a favourite (or a manual colour) holds that colour and dims both buttons; click either
+  one to start following again.
 - **Output:** toggle — turns stage-lighting control on/off. This is the only control you need
   mid-service.
 - **Colour circle** (far right) — shows the colour currently being sent (dimmed while off).
@@ -64,8 +85,21 @@ default). From left to right:
 ### Colour modes
 
 - **Follow slide** (default) — the stage colour is extracted from each live slide.
+- **Follow screen** — the stage colour is sampled from a display many times a second, so it
+  keeps moving while the background does. Use this for motion backgrounds, video, or any look
+  whose colour isn't in the slide thumbnail.
 - **Manual** — left-clicking a favourite, or saving a colour from the picker, holds that exact
-  colour and ignores slide changes until you press **Follow slide** again.
+  colour and ignores both sources until you press a Follow button again.
+
+Whichever mode you leave it in is remembered for next launch.
+
+#### Which one should I use?
+
+**Follow slide** is the lighter option and reacts exactly when the slide changes — ideal if your
+slides carry their own solid or gradient backgrounds. **Follow screen** costs a few percent of
+one CPU core but is the only one that can see a moving background, and it doesn't care how the
+look was built. If lyrics are transparent text over a motion background on ProPresenter's media
+layer, **Follow screen** is the one you want — the slide thumbnail alone has no colour in it.
 
 ## Using it as a plain DMX controller
 
@@ -80,7 +114,8 @@ colour checks, or venues that don't run ProPresenter:
 
 The only thing that needs ProPresenter is the **Follow slide** button — it stays greyed out when
 ProPresenter isn't connected, but everything else keeps working. So you can install it purely as a
-set-and-forget RGB controller and never enable the network API.
+set-and-forget RGB controller and never enable the network API. **Follow screen** works without
+ProPresenter too: point it at any display and the lights follow whatever is on it.
 
 ## First-time setup
 
@@ -98,20 +133,31 @@ Click the **cog** → **Settings…**
 | Target IP | Blank = broadcast (Art-Net) / multicast (sACN). Click **Scan…** to search the network (Art-Net discovery) and pick your node from a list |
 | Universe | Art-Net counts from 0, sACN counts from 1 |
 | Start channel | First channel of your RGB fixture (1–512). Layout is R, G, B — or Dimmer, R, G, B if you tick the master-dimmer box |
-| Fade time | How long colour changes take (ms) |
+| Display | Which screen **Follow screen** samples. Leave on *Main display* to always use the primary screen, or pick a specific one — normally whichever shows the audience/main output |
+| Smoothing | How quickly the lights chase a moving picture (ms). Higher is calmer, lower is snappier. 400 is a good starting point |
+| Sample rate | Frames per second sampled from the display. 30 is plenty; drop to 15 on a weak PC |
+| Fade time | How long a **slide change** takes to fade (ms). Follow screen uses Smoothing instead |
 | Brightness | Master intensity of the output |
 | Saturation boost | Makes washed-out slide colours punchier on stage |
 | Full intensity | Always drive lights at full brightness regardless of how dark the slide is (recommended) |
-| Colourless slides | What to do for black/white slides: keep last colour (default), fade off, or warm white |
+| No colour found | What to do for black/white slides or screens: keep last colour (default), fade off, or warm white |
 
 Then hit **Test DMX** (bottom-left of the Settings window) — the lights should run a rainbow sweep.
 If they do, you're patched correctly.
 
 ## Good to know
 
-- Colours come from the **slide thumbnail**. If your lyric slides are transparent text with the
-  motion background triggered on ProPresenter's *media layer*, the slide itself has no colour —
-  the "colourless slides" fallback rule applies. Slides/looks with built-in backgrounds work best.
+- In **Follow slide**, colours come from the **slide thumbnail**. If your lyric slides are
+  transparent text with the motion background triggered on ProPresenter's *media layer*, the
+  slide itself has no colour and the "no colour found" fallback applies. Switch to
+  **Follow screen** and it just works, because that samples the finished picture.
+- **Follow screen** needs the display **connected and awake**. It can't capture a projector
+  that's switched off, a screen that's asleep, or a machine you're only viewing over Remote
+  Desktop. If capture drops out (resolution change, a full-screen app taking over, the lock
+  screen), it reconnects by itself within a couple of seconds.
+- On a laptop with switchable graphics, Windows may put Slide Colours on a different GPU from
+  the one driving the output screen, which blocks capture. The hover tooltip on **Follow screen**
+  says so if it happens; fix it in *Windows Settings → System → Display → Graphics*.
 - When toggled **off**, the app stops sending DMX entirely (it doesn't send blackout), so a
   console merging via HTP/LTP will simply take back control.
 - Settings and your ten favourite colours live in `%APPDATA%\SlideColours\settings.json`.

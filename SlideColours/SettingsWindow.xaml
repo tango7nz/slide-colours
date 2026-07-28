@@ -79,6 +79,40 @@
             </Grid>
         </GroupBox>
 
+        <GroupBox Header="Screen capture (Follow screen)" Padding="8" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label Grid.Row="0" Grid.Column="0" Content="Display:"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CaptureDisplayBox" Margin="0,2"
+                          ToolTip="The screen to sample. Pick the one showing the audience/main output."/>
+
+                <Label Grid.Row="1" Grid.Column="0" Content="Smoothing (ms):"/>
+                <TextBox Grid.Row="1" Grid.Column="1" x:Name="SmoothingBox" Margin="0,2" VerticalContentAlignment="Center"
+                         ToolTip="How quickly the lights chase the picture. Higher is calmer, lower is snappier."/>
+
+                <Label Grid.Row="2" Grid.Column="0" Content="Sample rate:"/>
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="CaptureFpsBox" Margin="0,2"
+                          ToolTip="Frames per second sampled from the display">
+                    <ComboBoxItem Tag="15" Content="15 per second (lightest)"/>
+                    <ComboBoxItem Tag="30" Content="30 per second (recommended)"/>
+                    <ComboBoxItem Tag="60" Content="60 per second (smoothest)"/>
+                </ComboBox>
+
+                <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                           Text="Samples the screen itself, so animated and video backgrounds drive the lights. The display must be connected and awake — it won't capture a projector that's switched off."/>
+            </Grid>
+        </GroupBox>
+
         <GroupBox Header="Colour behaviour" Padding="8" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -95,7 +129,8 @@
                 </Grid.RowDefinitions>
 
                 <Label Grid.Row="0" Grid.Column="0" Content="Fade time (ms):"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="FadeBox" Margin="0,2" VerticalContentAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="FadeBox" Margin="0,2" VerticalContentAlignment="Center"
+                         ToolTip="How long a slide change takes to fade. Follow screen uses its own smoothing setting instead."/>
 
                 <Label Grid.Row="1" Grid.Column="0" Content="Brightness:"/>
                 <Slider Grid.Row="1" Grid.Column="1" x:Name="BrightnessSlider" Minimum="0" Maximum="100"
@@ -110,9 +145,9 @@
                 <CheckBox Grid.Row="3" Grid.ColumnSpan="3" x:Name="FullBrightnessCheck" Margin="4,8,0,2"
                           Content="Always output colours at full intensity (recommended for stage wash)"/>
 
-                <Label Grid.Row="4" Grid.Column="0" Content="Colourless slides:"/>
+                <Label Grid.Row="4" Grid.Column="0" Content="No colour found:"/>
                 <ComboBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" x:Name="FallbackBox" Margin="0,2"
-                          ToolTip="What to do when a slide is black &amp; white with no dominant colour">
+                          ToolTip="What to do when the slide or screen is black &amp; white with no dominant colour">
                     <ComboBoxItem Tag="keep" Content="Keep the last colour"/>
                     <ComboBoxItem Tag="off" Content="Fade lights to off"/>
                     <ComboBoxItem Tag="white" Content="Fade to warm white"/>

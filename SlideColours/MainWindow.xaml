@@ -41,6 +41,12 @@
                     Click="FollowSlide_Click" ToolTipService.ShowOnDisabled="True"
                     ToolTip="Match the stage colour to the live slide"/>
 
+            <!-- colour mode: sample a display continuously, for animated backgrounds -->
+            <Button x:Name="FollowScreenButton" Style="{StaticResource ModeButton}"
+                    Content="Follow screen" VerticalAlignment="Center" Margin="4,0,0,0"
+                    Click="FollowScreen_Click" ToolTipService.ShowOnDisabled="True"
+                    ToolTip="Match the stage colour to a display, live"/>
+
             <TextBlock Text="Output:" Foreground="#FFB8B8C0"
                        FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
                        Margin="12,0,8,0" VerticalAlignment="Center"/>

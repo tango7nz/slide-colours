@@ -16,20 +16,24 @@ public partial class MainWindow : Window
     private readonly AppSettings _settings;
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
+    private readonly ScreenColourSource _screen;
     private readonly UpdateService _update;
 
     private bool _connected;
-    private bool _following = true;
+    private ColourMode _mode = ColourMode.Slide;
+    private string? _captureStatus;
 
     private static readonly WpfBrush ModeActiveBrush = new SolidColorBrush(WpfColor.FromRgb(0x3A, 0x6F, 0xF0));
     private static readonly WpfBrush ModeMutedBrush = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0xB8, 0xC0));
     private static readonly WpfBrush ModeFaintBorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
 
-    public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client, UpdateService update)
+    public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
+        ScreenColourSource screen, UpdateService update)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
+        _screen = screen;
         _update = update;
 
         InitializeComponent();
@@ -44,20 +48,27 @@ public partial class MainWindow : Window
             UpdateBadge.Visibility = Visibility.Visible);
 
         EnableToggle.IsChecked = _engine.Enabled;
-        _following = _engine.FollowSlides;
+        _mode = _engine.Mode;
         _connected = _client.Connected;
-        RefreshFollowButton();
+        _captureStatus = _screen.Status;
+        RefreshModeButtons();
 
-        _engine.ModeChanged += following => Dispatcher.BeginInvoke(() =>
+        _engine.ModeChanged += mode => Dispatcher.BeginInvoke(() =>
         {
-            _following = following;
-            RefreshFollowButton();
+            _mode = mode;
+            RefreshModeButtons();
         });
 
         _client.ConnectionChanged += connected => Dispatcher.BeginInvoke(() =>
         {
             _connected = connected;
-            RefreshFollowButton();
+            RefreshModeButtons();
+        });
+
+        _screen.StatusChanged += status => Dispatcher.BeginInvoke(() =>
+        {
+            _captureStatus = status;
+            RefreshModeButtons();
         });
 
         _engine.OutputChanged += (colour, sending) => Dispatcher.BeginInvoke(() =>
@@ -145,20 +156,39 @@ public partial class MainWindow : Window
         _engine.Enabled = EnableToggle.IsChecked == true;
     }
 
-    private void FollowSlide_Click(object sender, RoutedEventArgs e) => _engine.SetFollowSlides();
+    private void FollowSlide_Click(object sender, RoutedEventArgs e) => _engine.SetMode(ColourMode.Slide);
 
-    private void RefreshFollowButton()
+    private void FollowScreen_Click(object sender, RoutedEventArgs e) => _engine.SetMode(ColourMode.Screen);
+
+    private void RefreshModeButtons()
     {
-        // Following slides is only possible while ProPresenter is connected.
+        // Following slides is only possible while ProPresenter is connected. Screen capture needs
+        // nothing but a display, so that button is always available.
         FollowSlideButton.IsEnabled = _connected;
-        FollowSlideButton.Background = _following ? ModeActiveBrush : Brushes.Transparent;
-        FollowSlideButton.Foreground = _following ? Brushes.White : ModeMutedBrush;
-        FollowSlideButton.BorderBrush = _following ? ModeActiveBrush : ModeFaintBorderBrush;
+        Highlight(FollowSlideButton, _mode == ColourMode.Slide);
         FollowSlideButton.ToolTip = !_connected
             ? $"ProPresenter not connected ({_settings.ProPresenterHost}:{_settings.ProPresenterPort}) — slide following unavailable"
-            : _following
+            : _mode == ColourMode.Slide
                 ? "Following the live slide"
                 : "Click to match the stage colour to the live slide";
+
+        Highlight(FollowScreenButton, _mode == ColourMode.Screen);
+        FollowScreenButton.ToolTip = _captureStatus
+            ?? (_mode == ColourMode.Screen
+                ? $"Following {DisplayName()} live — animated backgrounds included"
+                : $"Click to match the stage colour to {DisplayName()}, continuously");
+    }
+
+    private string DisplayName() =>
+        string.IsNullOrWhiteSpace(_settings.CaptureDisplay)
+            ? "the main display"
+            : _settings.CaptureDisplay.TrimStart('\\', '.').Replace("DISPLAY", "display ");
+
+    private static void Highlight(WpfButton button, bool active)
+    {
+        button.Background = active ? ModeActiveBrush : Brushes.Transparent;
+        button.Foreground = active ? Brushes.White : ModeMutedBrush;
+        button.BorderBrush = active ? ModeActiveBrush : ModeFaintBorderBrush;
     }
 
     private void PositionPickerNearPill(Window picker)
@@ -263,7 +293,7 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings, _engine, _client, _update) { Owner = this };
+        var dialog = new SettingsWindow(_settings, _engine, _client, _screen, _update) { Owner = this };
         dialog.ShowDialog();
     }
 
