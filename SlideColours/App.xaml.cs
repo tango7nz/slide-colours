@@ -12,6 +12,7 @@ public partial class App : System.Windows.Application
     private ProPresenterClient _client = null!;
     private ScreenColourSource _screen = null!;
     private UpdateService _update = null!;
+    private RemoteControlServer _remote = null!;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -34,23 +35,18 @@ public partial class App : System.Windows.Application
         _screen = new ScreenColourSource(_settings);
         _screen.ColourSampled += _engine.OnScreenColour;
 
-        // Capture only runs while the screen is actually the colour source, and the app comes back
-        // up in whichever mode it was left in.
-        _engine.ModeChanged += mode =>
-        {
-            _screen.SetActive(mode == ColourMode.Screen);
-            if (mode != ColourMode.Manual)
-            {
-                _settings.ColourSource = mode == ColourMode.Screen ? "screen" : "slide";
-                _settings.Save();
-            }
-        };
-        if (_settings.ColourSource == "screen")
-            _engine.SetMode(ColourMode.Screen);
+        // Capture only runs while at least one group is following the screen. Group sources live in
+        // the settings file, so the app comes back up driving each group the way it was left.
+        _engine.ScreenNeededChanged += needed => _screen.SetActive(needed);
+        _screen.SetActive(_engine.ScreenNeeded);
 
         _update = new UpdateService();
 
-        MainWindow = new MainWindow(_settings, _engine, _client, _screen, _update);
+        // Off unless the user has turned it on; Restart() is a no-op when disabled.
+        _remote = new RemoteControlServer(_settings, _engine);
+        _remote.Restart();
+
+        MainWindow = new MainWindow(_settings, _engine, _client, _screen, _update, _remote);
         MainWindow.Show();
 
         // Check for a new version in the background (unless the user turned this off); the window
@@ -63,6 +59,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cts.Cancel();
+        _remote.Dispose();
         _screen.Dispose();
         _engine.Dispose();
         _settings.Save();

@@ -1,23 +1,12 @@
-using System.Windows.Media;
 using SlideColours.Models;
 using WpfColor = System.Windows.Media.Color;
+using WpfColorConverter = System.Windows.Media.ColorConverter;
 
 namespace SlideColours.Services;
 
-/// <summary>Where the stage colour comes from.</summary>
-public enum ColourMode
-{
-    /// <summary>The dominant colour of each ProPresenter slide as it goes live.</summary>
-    Slide,
-    /// <summary>The colour of a display, sampled continuously — follows animated backgrounds.</summary>
-    Screen,
-    /// <summary>A colour the user picked; slides and the screen are ignored.</summary>
-    Manual,
-}
-
 /// <summary>
-/// Owns the DMX output: fades the current colour towards the target and, while enabled,
-/// transmits DMX frames ~30 times per second.
+/// Owns the DMX output. Every group fades its own colour towards its own target, and while enabled
+/// the merged result is transmitted ~30 times per second.
 /// </summary>
 public class LightingEngine : IDisposable
 {
@@ -33,55 +22,302 @@ public class LightingEngine : IDisposable
     /// </summary>
     private const int ScreenFadeMs = 120;
 
+    /// <summary>Live fade state for one group. Rebuilt from settings by <see cref="ReloadRig"/>.</summary>
+    private sealed class GroupState
+    {
+        public required LightGroup Config { get; init; }
+        public required List<Fixture> Fixtures { get; init; }
+        public double CurR, CurG, CurB;
+        public double TgtR, TgtG, TgtB;
+        public int FadeMs;
+    }
+
     private IDmxOutput? _output;
     private DateTime _outputRetryAt = DateTime.MinValue;
-    private double _curR, _curG, _curB;
-    private double _tgtR, _tgtG, _tgtB;
-    private int _fadeMs;
-    private DateTime _testUntil = DateTime.MinValue;
+    private List<GroupState> _groups = new();
+
+    /// <summary>
+    /// Fixtures the patch test is walking, one at a time. Empty when no test is running. These are
+    /// the caller's own <see cref="Fixture"/> objects, so the rig editor can test an edited channel
+    /// before it's been saved.
+    /// </summary>
+    private List<Fixture> _testSequence = new();
+    private DateTime _testStart;
+    private Fixture? _testCurrent;
+    private double _testR, _testG, _testB;
+
+    /// <summary>How long each fixture is lit for, split evenly between the four test colours.</summary>
+    private const double TestSecondsPerFixture = 2.0;
+
+    /// <summary>
+    /// Red, green, blue then white. Stepping through the primaries proves the channels are in the
+    /// right order — a fixture patched one channel out shows the wrong colours, which a plain white
+    /// flash would hide.
+    /// </summary>
+    private static readonly WpfColor[] TestColours =
+    {
+        WpfColor.FromRgb(255, 0, 0),
+        WpfColor.FromRgb(0, 255, 0),
+        WpfColor.FromRgb(0, 0, 255),
+        WpfColor.FromRgb(255, 255, 255),
+    };
     private WpfColor _lastNotified;
     private bool _lastSending;
-    private bool _notifiedOnce;
+    private volatile bool _notifiedOnce;
+    private bool _lastScreenNeeded;
 
     public bool Enabled { get; set; }
 
-    private volatile ColourMode _mode = ColourMode.Slide;
-    /// <summary>Where the stage colour is currently coming from.</summary>
-    public ColourMode Mode => _mode;
+    private volatile string _activeGroupId = "";
 
-    /// <summary>Fired (from a background thread) when the visible output colour or sending state changes.</summary>
+    /// <summary>The group the main window's controls act on; drives <see cref="OutputChanged"/>.</summary>
+    public string ActiveGroupId
+    {
+        get => _activeGroupId;
+        set
+        {
+            if (_activeGroupId == value)
+                return;
+            _activeGroupId = value;
+            _settings.ActiveGroupId = value;
+            GroupsChanged?.Invoke();
+        }
+    }
+
+    /// <summary>True while any group is following the screen, so capture can be left off otherwise.</summary>
+    public bool ScreenNeeded
+    {
+        get
+        {
+            lock (_sync)
+                return _groups.Any(g => g.Config.Source == ColourSources.Screen);
+        }
+    }
+
+    /// <summary>True while any group is following slides, so slide images are worth decoding.</summary>
+    private bool SlideNeeded
+    {
+        get
+        {
+            lock (_sync)
+                return _groups.Any(g => g.Config.Source == ColourSources.Slide);
+        }
+    }
+
+    /// <summary>Fired (from a background thread) when the active group's colour or sending state changes.</summary>
     public event Action<WpfColor, bool>? OutputChanged;
     /// <summary>Fired when the DMX output fails or recovers; null = healthy.</summary>
     public event Action<string?>? OutputError;
-    /// <summary>Fired when the colour mode changes.</summary>
-    public event Action<ColourMode>? ModeChanged;
+    /// <summary>Fired when groups, their sources, or the active group change.</summary>
+    public event Action? GroupsChanged;
+    /// <summary>Fired when screen capture becomes needed or unneeded.</summary>
+    public event Action<bool>? ScreenNeededChanged;
 
     public LightingEngine(AppSettings settings)
     {
         _settings = settings;
-        _fadeMs = settings.FadeMs;
+        _activeGroupId = settings.ResolveStartupGroupId();
+        ReloadRig();
+
+        // A pinned startup scene deliberately overrides whatever the groups were left doing, so
+        // every service opens on the same defined look rather than on last week's closing song.
+        if (settings.StartupScene is { } scene)
+            ApplyScene(scene);
     }
 
     public void Start() => Task.Run(LoopAsync);
 
-    /// <summary>Call after settings change so the DMX output is rebuilt with the new protocol/target.</summary>
-    public void RefreshOutput()
+    /// <summary>
+    /// Rebuilds the group list from settings. Call after the rig or the DMX endpoint is edited.
+    /// Groups that still exist keep the colour they are currently showing, so saving settings
+    /// mid-service doesn't blink the lights back through black.
+    /// </summary>
+    public void ReloadRig()
     {
         lock (_sync)
         {
+            var previous = _groups.ToDictionary(g => g.Config.Id);
+            var byId = _settings.Fixtures.ToDictionary(f => f.Id);
+
+            _groups = _settings.Groups.Select(group =>
+            {
+                var state = new GroupState
+                {
+                    Config = group,
+                    Fixtures = group.FixtureIds
+                        .Where(byId.ContainsKey)
+                        .Select(id => byId[id])
+                        .ToList(),
+                    FadeMs = _settings.FadeMs,
+                };
+                if (previous.TryGetValue(group.Id, out var old))
+                {
+                    state.CurR = old.CurR; state.CurG = old.CurG; state.CurB = old.CurB;
+                    state.TgtR = old.TgtR; state.TgtG = old.TgtG; state.TgtB = old.TgtB;
+                }
+                return state;
+            }).ToList();
+
+            // "manual" and "off" groups get no external updates, so seed their target now —
+            // otherwise a newly added group would sit at black until its source changed.
+            foreach (var state in _groups)
+                SeedStaticTarget(state);
+
             _output?.Dispose();
             _output = null;
             _outputRetryAt = DateTime.MinValue;
         }
+
+        if (!_settings.Groups.Any(g => g.Id == _activeGroupId) && _settings.Groups.Count > 0)
+            _activeGroupId = _settings.Groups[0].Id;
+
+        GroupsChanged?.Invoke();
+        RaiseScreenNeeded();
     }
 
-    /// <summary>Runs an 8-second rainbow sweep, sending DMX even if the toggle is off — for checking patching.</summary>
-    public void RunTestSweep() => _testUntil = DateTime.UtcNow.AddSeconds(8);
+    /// <summary>
+    /// Lights the given fixtures one at a time — red, green, blue, white — so you can see which
+    /// light is which and that its channels are in the right order. Every other fixture is held
+    /// dark for the duration, and it transmits even when the output toggle is off.
+    ///
+    /// Pass a single fixture to identify one light; pass the whole rig to walk it.
+    /// </summary>
+    public void RunPatchTest(IEnumerable<Fixture> fixtures)
+    {
+        var sequence = fixtures.ToList();
+        lock (_sync)
+        {
+            _testSequence = sequence;
+            _testStart = DateTime.UtcNow;
+        }
+    }
+
+    public void StopPatchTest()
+    {
+        lock (_sync)
+            _testSequence = new List<Fixture>();
+    }
+
+    public bool TestRunning
+    {
+        get { lock (_sync) return _testSequence.Count > 0; }
+    }
+
+    /// <summary>Fired as the patch test moves to the next fixture; null when it finishes or is stopped.</summary>
+    public event Action<Fixture?>? TestFixtureChanged;
+
+    /// <summary>
+    /// Makes the next frame re-raise <see cref="OutputChanged"/> even if nothing moved. The engine
+    /// starts before the window exists, so a colour that has already settled — a group holding a
+    /// manual colour restored from settings — would otherwise never be announced to a late
+    /// subscriber, leaving the swatch black.
+    /// </summary>
+    public void ResendOutputState() => _notifiedOnce = false;
+
+    /// <summary>Points a group at a different colour source and persists the change.</summary>
+    public void SetGroupSource(string groupId, string source)
+    {
+        source = ColourSources.Normalise(source);
+        lock (_sync)
+        {
+            var state = _groups.FirstOrDefault(g => g.Config.Id == groupId);
+            if (state == null || state.Config.Source == source)
+                return;
+            state.Config.Source = source;
+            SeedStaticTarget(state);
+        }
+        _settings.Save();
+        GroupsChanged?.Invoke();
+        RaiseScreenNeeded();
+    }
+
+    /// <summary>Holds a chosen colour on a group, switching it to the manual source.</summary>
+    public void SetGroupManualColour(string groupId, WpfColor colour)
+    {
+        lock (_sync)
+        {
+            var state = _groups.FirstOrDefault(g => g.Config.Id == groupId);
+            if (state == null)
+                return;
+            state.Config.Source = ColourSources.Manual;
+            state.Config.ManualColour = $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
+            SetTarget(state, colour.R, colour.G, colour.B, _settings.FadeMs);
+        }
+        _settings.Save();
+        GroupsChanged?.Invoke();
+        RaiseScreenNeeded();
+    }
+
+    /// <summary>
+    /// Recalls a saved look: every group the scene lists is switched to its stored source and
+    /// colour. Groups added since the scene was saved aren't mentioned by it and are left running
+    /// as they are. The scene itself is never modified — see <see cref="CaptureScene"/> for that.
+    /// </summary>
+    public void ApplyScene(Scene scene)
+    {
+        lock (_sync)
+        {
+            foreach (var state in _groups)
+            {
+                if (scene.For(state.Config.Id) is not { } entry)
+                    continue;
+
+                state.Config.Source = ColourSources.Normalise(entry.Source);
+                if (state.Config.Source == ColourSources.Manual)
+                    state.Config.ManualColour = entry.ManualColour;
+                SeedStaticTarget(state);
+            }
+        }
+        _settings.Save();
+        GroupsChanged?.Invoke();
+        RaiseScreenNeeded();
+    }
+
+    /// <summary>Snapshots what every group is doing right now, for saving into a scene.</summary>
+    public List<SceneGroupState> CaptureScene()
+    {
+        lock (_sync)
+        {
+            return _groups.Select(g => new SceneGroupState
+            {
+                GroupId = g.Config.Id,
+                Source = g.Config.Source,
+                ManualColour = g.Config.ManualColour,
+            }).ToList();
+        }
+    }
+
+    /// <summary>
+    /// True when every group the scene mentions is currently doing exactly what it says. Lets the
+    /// main window show which scene is live, and fall back to "custom" once anything is nudged.
+    /// </summary>
+    public bool MatchesScene(Scene scene)
+    {
+        lock (_sync)
+        {
+            if (scene.Groups.Count == 0)
+                return false;
+            foreach (var entry in scene.Groups)
+            {
+                var state = _groups.FirstOrDefault(g => g.Config.Id == entry.GroupId);
+                if (state == null || !entry.Matches(state.Config))
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>The source a group is currently using, or "off" for an unknown group.</summary>
+    public string SourceOf(string groupId)
+    {
+        lock (_sync)
+            return _groups.FirstOrDefault(g => g.Config.Id == groupId)?.Config.Source ?? ColourSources.Off;
+    }
 
     public void OnSlideImage(byte[] imageBytes)
     {
-        if (_mode != ColourMode.Slide)
-            return; // following the screen, or holding a manual colour
+        if (!SlideNeeded)
+            return;
 
         Task.Run(() =>
         {
@@ -89,9 +325,9 @@ public class LightingEngine : IDisposable
             {
                 WpfColor? dominant = ColorExtractor.Extract(imageBytes);
                 if (dominant is { } c)
-                    Apply(c, _settings.FadeMs);
+                    ApplyToSource(ColourSources.Slide, c, _settings.FadeMs);
                 else
-                    ApplyFallback(_settings.FadeMs);
+                    ApplyFallback(ColourSources.Slide, _settings.FadeMs);
             }
             catch
             {
@@ -100,11 +336,7 @@ public class LightingEngine : IDisposable
         });
     }
 
-    public void OnSlideCleared()
-    {
-        if (_mode == ColourMode.Slide)
-            ApplyFallback(_settings.FadeMs);
-    }
+    public void OnSlideCleared() => ApplyFallback(ColourSources.Slide, _settings.FadeMs);
 
     /// <summary>
     /// A colour sampled from the captured display, already smoothed over time by
@@ -112,52 +344,82 @@ public class LightingEngine : IDisposable
     /// </summary>
     public void OnScreenColour(WpfColor? colour)
     {
-        if (_mode != ColourMode.Screen)
-            return;
-
         if (colour is { } c)
-            Apply(c, ScreenFadeMs);
+            ApplyToSource(ColourSources.Screen, c, ScreenFadeMs);
         else
-            ApplyFallback(ScreenFadeMs);
+            ApplyFallback(ColourSources.Screen, ScreenFadeMs);
     }
 
-    /// <summary>Hold a manually chosen colour, ignoring slides and the screen until <see cref="SetMode"/> is called.</summary>
-    public void SetManualColour(WpfColor colour)
-    {
-        SetMode(ColourMode.Manual);
-        SetTarget(colour.R, colour.G, colour.B, _settings.FadeMs);
-    }
-
-    /// <summary>Switches where the stage colour comes from. The colour itself updates on the next sample.</summary>
-    public void SetMode(ColourMode mode)
-    {
-        if (_mode == mode)
-            return;
-        _mode = mode;
-        ModeChanged?.Invoke(mode);
-    }
-
-    private void Apply(WpfColor colour, int fadeMs)
+    /// <summary>Sends one shaped colour to every group currently listening to <paramref name="source"/>.</summary>
+    private void ApplyToSource(string source, WpfColor colour, int fadeMs)
     {
         var shaped = ColorExtractor.ShapeForLighting(
             colour, _settings.SaturationBoostPercent / 100.0, _settings.FullBrightnessColours);
-        SetTarget(shaped.R, shaped.G, shaped.B, fadeMs);
-    }
 
-    private void ApplyFallback(int fadeMs)
-    {
-        switch (_settings.Fallback)
+        lock (_sync)
         {
-            case "off": SetTarget(0, 0, 0, fadeMs); break;
-            case "white": SetTarget(255, 214, 170, fadeMs); break; // warm white
-            default: break;                                        // keep last colour
+            foreach (var state in _groups.Where(g => g.Config.Source == source))
+                SetTarget(state, shaped.R, shaped.G, shaped.B, fadeMs);
         }
     }
 
-    private void SetTarget(byte r, byte g, byte b, int fadeMs)
+    private void ApplyFallback(string source, int fadeMs)
     {
-        _tgtR = r; _tgtG = g; _tgtB = b;
-        _fadeMs = fadeMs;
+        lock (_sync)
+        {
+            foreach (var state in _groups.Where(g => g.Config.Source == source))
+            {
+                switch (_settings.Fallback)
+                {
+                    case "off": SetTarget(state, 0, 0, 0, fadeMs); break;
+                    case "white": SetTarget(state, 255, 214, 170, fadeMs); break; // warm white
+                    default: break;                                              // keep last colour
+                }
+            }
+        }
+    }
+
+    /// <summary>Sets the target for sources that never receive updates: the manual colour, or black.</summary>
+    private void SeedStaticTarget(GroupState state)
+    {
+        if (state.Config.Source == ColourSources.Off)
+        {
+            SetTarget(state, 0, 0, 0, _settings.FadeMs);
+        }
+        else if (state.Config.Source == ColourSources.Manual)
+        {
+            var colour = ParseColour(state.Config.ManualColour);
+            SetTarget(state, colour.R, colour.G, colour.B, _settings.FadeMs);
+        }
+    }
+
+    private static void SetTarget(GroupState state, byte r, byte g, byte b, int fadeMs)
+    {
+        state.TgtR = r; state.TgtG = g; state.TgtB = b;
+        state.FadeMs = fadeMs;
+    }
+
+    private static WpfColor ParseColour(string? value)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return (WpfColor)WpfColorConverter.ConvertFromString(value);
+        }
+        catch
+        {
+            // hand-edited settings file — fall through
+        }
+        return System.Windows.Media.Colors.White;
+    }
+
+    private void RaiseScreenNeeded()
+    {
+        bool needed = ScreenNeeded;
+        if (needed == _lastScreenNeeded)
+            return;
+        _lastScreenNeeded = needed;
+        ScreenNeededChanged?.Invoke(needed);
     }
 
     private async Task LoopAsync()
@@ -172,25 +434,34 @@ public class LightingEngine : IDisposable
                 double dtMs = (now - last).TotalMilliseconds;
                 last = now;
 
-                bool testing = now < _testUntil;
-                if (testing)
+                WpfColor visible;
+                Fixture? testFixture;
+                lock (_sync)
                 {
-                    // full rainbow every 8 seconds
-                    double hue = now.TimeOfDay.TotalMilliseconds / 8000.0 % 1.0 * 360.0;
-                    var c = ColorExtractor.HsvToRgb(hue, 1, 1);
-                    SetTarget(c.R, c.G, c.B, _settings.FadeMs);
+                    testFixture = AdvanceTestLocked(now);
+                    foreach (var state in _groups)
+                    {
+                        double maxStep = 255.0 * dtMs / Math.Max(50, state.FadeMs);
+                        state.CurR = MoveToward(state.CurR, state.TgtR, maxStep);
+                        state.CurG = MoveToward(state.CurG, state.TgtG, maxStep);
+                        state.CurB = MoveToward(state.CurB, state.TgtB, maxStep);
+                    }
+
+                    visible = testFixture != null
+                        ? Rgb(_testR, _testG, _testB)
+                        : ActiveColourLocked();
                 }
 
-                double maxStep = 255.0 * dtMs / Math.Max(50, _fadeMs);
-                _curR = MoveToward(_curR, _tgtR, maxStep);
-                _curG = MoveToward(_curG, _tgtG, maxStep);
-                _curB = MoveToward(_curB, _tgtB, maxStep);
+                if (!ReferenceEquals(testFixture, _testCurrent))
+                {
+                    _testCurrent = testFixture;
+                    TestFixtureChanged?.Invoke(testFixture);
+                }
 
-                bool sending = Enabled || testing;
+                bool sending = Enabled || testFixture != null;
                 if (sending)
-                    Transmit();
+                    Transmit(testFixture);
 
-                var visible = WpfColor.FromRgb((byte)Math.Round(_curR), (byte)Math.Round(_curG), (byte)Math.Round(_curB));
                 if (!_notifiedOnce || visible != _lastNotified || sending != _lastSending)
                 {
                     _notifiedOnce = true;
@@ -205,7 +476,49 @@ public class LightingEngine : IDisposable
         }
     }
 
-    private void Transmit()
+    /// <summary>
+    /// Works out which fixture the patch test should be lighting, and in which colour. Returns null
+    /// when no test is running or the sequence has finished. Caller must hold <see cref="_sync"/>.
+    /// </summary>
+    private Fixture? AdvanceTestLocked(DateTime now)
+    {
+        if (_testSequence.Count == 0)
+            return null;
+
+        double elapsed = (now - _testStart).TotalSeconds;
+        int index = (int)(elapsed / TestSecondsPerFixture);
+        if (index >= _testSequence.Count)
+        {
+            _testSequence = new List<Fixture>();
+            return null;
+        }
+
+        // Snap between the four colours rather than fading — crisp steps are much easier to read
+        // off a stage than a slow crossfade.
+        double within = elapsed - index * TestSecondsPerFixture;
+        int step = Math.Clamp(
+            (int)(within / (TestSecondsPerFixture / TestColours.Length)), 0, TestColours.Length - 1);
+        var colour = TestColours[step];
+        _testR = colour.R;
+        _testG = colour.G;
+        _testB = colour.B;
+
+        return _testSequence[index];
+    }
+
+    /// <summary>The colour of the active group. Caller must hold <see cref="_sync"/>.</summary>
+    private WpfColor ActiveColourLocked()
+    {
+        var state = _groups.FirstOrDefault(g => g.Config.Id == _activeGroupId) ?? _groups.FirstOrDefault();
+        return state == null ? System.Windows.Media.Colors.Black : Rgb(state.CurR, state.CurG, state.CurB);
+    }
+
+    private static WpfColor Rgb(double r, double g, double b) =>
+        WpfColor.FromRgb((byte)Math.Round(Math.Clamp(r, 0, 255)),
+                         (byte)Math.Round(Math.Clamp(g, 0, 255)),
+                         (byte)Math.Round(Math.Clamp(b, 0, 255)));
+
+    private void Transmit(Fixture? testFixture)
     {
         lock (_sync)
         {
@@ -228,7 +541,7 @@ public class LightingEngine : IDisposable
 
             try
             {
-                BuildFrame();
+                BuildFrame(testFixture);
                 _output.SendFrame(_frame);
             }
             catch (Exception ex)
@@ -248,21 +561,53 @@ public class LightingEngine : IDisposable
         _ => new ArtNetOutput(_settings.TargetIp, _settings.Universe),
     };
 
-    private void BuildFrame()
+    /// <summary>
+    /// Paints every group's colour onto its fixtures. While the patch test is running, only the
+    /// fixture under test is lit and everything else is held dark — that's what makes it possible
+    /// to tell which light is which. Caller holds the lock.
+    /// </summary>
+    private void BuildFrame(Fixture? testFixture)
     {
         Array.Clear(_frame);
         double brightness = Math.Clamp(_settings.BrightnessPercent, 0, 100) / 100.0;
-        int i = Math.Clamp(_settings.StartChannel, 1, 512) - 1;
+
+        if (testFixture != null)
+        {
+            WriteFixture(testFixture, _testR, _testG, _testB, brightness);
+            return;
+        }
+
+        foreach (var state in _groups)
+            foreach (var fixture in state.Fixtures)
+                WriteFixture(fixture, state.CurR, state.CurG, state.CurB, brightness);
+    }
+
+    private void WriteFixture(Fixture fixture, double r, double g, double b, double brightness)
+    {
+        int i = Math.Clamp(fixture.StartChannel, 1, 512) - 1;
         double scale = brightness;
 
-        if (_settings.HasMasterDimmer)
+        if (fixture.HasMasterDimmer)
         {
-            _frame[i++] = (byte)Math.Round(255 * brightness);
+            Merge(i++, 255 * brightness);
             scale = 1.0; // dimmer handles intensity, colour channels stay pure
         }
-        if (i < 512) _frame[i++] = (byte)Math.Round(_curR * scale);
-        if (i < 512) _frame[i++] = (byte)Math.Round(_curG * scale);
-        if (i < 512) _frame[i] = (byte)Math.Round(_curB * scale);
+        Merge(i++, r * scale);
+        Merge(i++, g * scale);
+        Merge(i, b * scale);
+    }
+
+    /// <summary>
+    /// Highest-takes-precedence, the lighting-desk convention for merging sources. A fixture put in
+    /// two groups therefore shows the brighter of the two rather than depending on group order.
+    /// </summary>
+    private void Merge(int index, double value)
+    {
+        if (index < 0 || index >= _frame.Length)
+            return;
+        byte level = (byte)Math.Round(Math.Clamp(value, 0, 255));
+        if (level > _frame[index])
+            _frame[index] = level;
     }
 
     private static double MoveToward(double current, double target, double maxStep)

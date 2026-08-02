@@ -4,13 +4,15 @@ Matches your stage lighting to what's on screen. Slide Colours takes the dominan
 ProPresenter is showing and streams it to your DMX rig — with a small floating on/off toggle you
 can park anywhere on screen. It can follow either **the live slide** or **a display**, the latter
 sampled many times a second so animated and video backgrounds drive the lights like a TV
-backlight. It also doubles as a dead-simple standalone DMX colour controller when you're not
-driving it from ProPresenter at all (see
+backlight. Name your lights, group them, and each group runs on its own source — so the front wash
+can follow the screen while the sides hold a colour — then save the whole stage as a **scene** you
+can recall in one click. It also doubles as a dead-simple standalone DMX
+colour controller when you're not driving it from ProPresenter at all (see
 [Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
 
 <p align="center">
-  <img src="docs/images/pill.png" width="760"
-       alt="The floating Slide Colours pill: close, settings cog, ten favourite-colour swatches, Follow slide and Follow screen buttons, an Output toggle, and the current-colour circle">
+  <img src="docs/images/pill.png" width="880"
+       alt="The floating Slide Colours pill: close, settings cog, a Scene picker set to Pre-service, a Group picker set to Side Wash, ten favourite-colour swatches, Follow slide, Follow screen and Off buttons, an Output toggle, and the current-colour circle">
 </p>
 
 ## Download
@@ -64,34 +66,83 @@ default). From left to right:
 
 - **✕ Close** — quits the app.
 - **Cog** — opens *Settings…*.
+- **Scene** — recalls a saved look, setting every group at once. Shows **—** whenever the stage
+  doesn't match any scene, so it never claims a look is loaded after you've nudged something by hand.
+- **Group** — picks which group of lights the rest of the pill controls. Every group keeps running
+  on its own source; this only chooses the one you're about to change.
 - **Favourite colours** — ten preset swatches:
-  - **Left-click** to send that colour to the lights (this switches to *manual* mode — see below).
+  - **Left-click** to hold that colour on the selected group (this switches it to *manual* — see below).
   - **Right-click** to edit that swatch: a colour picker opens seeded with its current colour, and
     saving stores the new colour in that slot.
-- **Follow slide** — track the live slide. When highlighted (blue), the stage colour changes with
-  each new slide. It's **greyed out when ProPresenter isn't connected** (hover it to see why) —
-  that's also your connection indicator.
-- **Follow screen** — track a display continuously instead, so animated backgrounds and video
-  come through. Highlighted blue while active; hover it to see which display it's watching, or
-  why capture isn't working. Choose the display in **Settings**.
-- Picking a favourite (or a manual colour) holds that colour and dims both buttons; click either
-  one to start following again.
-- **Output:** toggle — turns stage-lighting control on/off. This is the only control you need
-  mid-service.
-- **Colour circle** (far right) — shows the colour currently being sent (dimmed while off).
+- **Follow slide** — the selected group tracks the live slide. When highlighted (blue), its colour
+  changes with each new slide. It's **greyed out when ProPresenter isn't connected** (hover it to
+  see why) — that's also your connection indicator.
+- **Follow screen** — the selected group tracks a display continuously instead, so animated
+  backgrounds and video come through. Highlighted blue while active; hover it to see which display
+  it's watching, or why capture isn't working. Choose the display in **Settings**.
+- **Off** — holds the selected group dark while every other group keeps running.
+- **Output:** toggle — turns stage-lighting control on/off for the whole rig. This is the only
+  control you need mid-service.
+- **Colour circle** (far right) — shows the colour the selected group is sending (dimmed while off).
 
 **Drag** any empty part of the pill to move it; the position is remembered (and kept on-screen).
 
-### Colour modes
+### Lights and groups
 
-- **Follow slide** (default) — the stage colour is extracted from each live slide.
-- **Follow screen** — the stage colour is sampled from a display many times a second, so it
-  keeps moving while the background does. Use this for motion backgrounds, video, or any look
-  whose colour isn't in the slide thumbnail.
+A **light** is one fixture: a name you recognise ("Left Front") and the DMX channel its colour
+starts at. A **group** is a named set of lights that share one colour and one source.
+
+Groups all run **at the same time**, each with its own source — so the front wash can follow the
+screen while a side wash holds a fixed blue and a back wash sits off. Set them up in
+**Settings → Lights & groups**, then switch between them with the pill's **Group** picker.
+
+A light that isn't in any group stays dark. A light in two groups shows the brighter of the two
+(highest-takes-precedence, the same way a lighting desk merges sources).
+
+### Colour sources
+
+Each group is set to one of:
+
+- **Follow slide** (default) — colour extracted from each live slide.
+- **Follow screen** — colour sampled from a display many times a second, so it keeps moving while
+  the background does. Use this for motion backgrounds, video, or any look whose colour isn't in
+  the slide thumbnail.
 - **Manual** — left-clicking a favourite, or saving a colour from the picker, holds that exact
-  colour and ignores both sources until you press a Follow button again.
+  colour on that group until you press a Follow button again.
+- **Off** — that group is held dark.
 
-Whichever mode you leave it in is remembered for next launch.
+Every group's source is remembered for next launch. Screen capture only runs while at least one
+group is actually following the screen.
+
+### Scenes
+
+A **scene** is a saved look for the whole stage — what every group should be doing — recalled in one
+click from the pill. Typical set: *Pre-service*, *Worship*, *Message*, *Response*.
+
+The workflow is the one a lighting desk uses: get the stage looking right, then save it.
+
+1. Set your groups up live using the pill.
+2. **Settings → Scenes… → Add scene** captures exactly what the lights are doing now.
+3. Name it, and hit Save.
+
+From then on, picking that scene from the pill's **Scene** box restores it.
+
+<p align="center">
+  <img src="docs/images/scenes.png" width="760"
+       alt="The Scenes editor: a list of scenes named Pre-service, Worship and Message on the left; on the right, what the selected Worship scene sets for each group — Front Wash following the screen and Side Wash holding a blue colour">
+</p>
+
+**A scene is a snapshot, not a live link.** Changing a colour mid-service edits the *group*, never
+the scene — so what a scene restores is the look you deliberately saved, not whatever last Sunday
+happened to end on. When you do want to update one, open **Scenes…**, select it, and click
+**Set from current lights**.
+
+Set **Settings → Startup → Recall scene** and the app opens on that look every time, overriding
+whatever state it was left in. That's the reliable way to make sure the stage looks the same at the
+start of every service.
+
+Groups added after a scene was saved simply aren't mentioned by it, and are left running as they
+are. Deleting a group removes it from every scene.
 
 #### Which one should I use?
 
@@ -107,9 +158,10 @@ You don't need ProPresenter at all. Manual colour control talks straight to your
 app works on its own as a tiny always-on-top colour controller — handy for a static wash, quick
 colour checks, or venues that don't run ProPresenter:
 
-- Point it at your fixture once in **Settings** (protocol, universe, start channel — same as below).
-- **Left-click a favourite** to send that colour, or **right-click** one to pick any colour you like.
-  These drive the lights immediately; there's no slide involved.
+- Set up your lights once in **Settings** (protocol, universe, then **Lights & groups** — same as below).
+- **Left-click a favourite** to hold that colour on the selected group, or **right-click** one to pick
+  any colour you like. These drive the lights immediately; there's no slide involved.
+- With several groups you get independent colour control per part of the stage, straight from the pill.
 - Flip the **Output** toggle on to transmit, off to hand control back to your desk.
 
 The only thing that needs ProPresenter is the **Follow slide** button — it stays greyed out when
@@ -122,8 +174,8 @@ ProPresenter too: point it at any display and the lights follow whatever is on i
 Click the **cog** → **Settings…**
 
 <p align="center">
-  <img src="docs/images/settings.png" width="380"
-       alt="The Slide Colours Settings window: ProPresenter connection, DMX output, colour behaviour, and update options">
+  <img src="docs/images/settings.png" width="760"
+       alt="The Slide Colours Settings window in two columns: ProPresenter connection, DMX output, lights/groups/scenes, screen capture and remote control on the left; colour behaviour, updates, startup options and the settings file on the right">
 </p>
 
 | Setting | Notes |
@@ -132,7 +184,8 @@ Click the **cog** → **Settings…**
 | Protocol | Art-Net, sACN, or Enttec USB Pro |
 | Target IP | Blank = broadcast (Art-Net) / multicast (sACN). Click **Scan…** to search the network (Art-Net discovery) and pick your node from a list |
 | Universe | Art-Net counts from 0, sACN counts from 1 |
-| Start channel | First channel of your RGB fixture (1–512). Layout is R, G, B — or Dimmer, R, G, B if you tick the master-dimmer box |
+| Lights & groups | Opens the rig editor — see below. This replaces the single start-channel box from earlier versions |
+| Scenes | Opens the scene editor — saved looks that set every group at once |
 | Display | Which screen **Follow screen** samples. Leave on *Main display* to always use the primary screen, or pick a specific one — normally whichever shows the audience/main output |
 | Smoothing | How quickly the lights chase a moving picture (ms). Higher is calmer, lower is snappier. 400 is a good starting point |
 | Sample rate | Frames per second sampled from the display. 30 is plenty; drop to 15 on a weak PC |
@@ -141,9 +194,102 @@ Click the **cog** → **Settings…**
 | Saturation boost | Makes washed-out slide colours punchier on stage |
 | Full intensity | Always drive lights at full brightness regardless of how dark the slide is (recommended) |
 | No colour found | What to do for black/white slides or screens: keep last colour (default), fade off, or warm white |
+| Turn lighting control on at start | Starts transmitting DMX as soon as the app opens, instead of waiting for the Output toggle |
+| Selected group at start | Which group the pill's controls act on when the app opens. *Last used* (default) reopens on whatever you left selected; pick a group to always start there. Every group still runs on its own source either way |
+| Recall scene at start | A scene to apply on launch, so every service opens on the same look regardless of how the last one ended. *Don't recall a scene* (default) leaves the groups as they were left |
+| Remote control | Lets Bitfocus Companion / a Stream Deck recall scenes and toggle output over HTTP — see [Remote control](#remote-control-stream-deck--companion). Off by default |
+| Save to file / Load from file | Writes everything — connection, patch, lights, groups, colour behaviour — to a `.json` you can keep as a backup or carry to another PC. Loading one replaces all current settings (it asks first, and tells you how many lights and groups the file contains) |
 
-Then hit **Test DMX** (bottom-left of the Settings window) — the lights should run a rainbow sweep.
-If they do, you're patched correctly.
+### Setting up your lights and groups
+
+In **Settings**, click **Lights & groups…**
+
+**Lights** (left) — click **Add light** for each fixture, give it a name you'll recognise on stage,
+and set its **start channel**. The layout is R, G, B — or Dimmer, R, G, B if you tick the
+master-dimmer box. The list shows the channel range each light occupies, and warns you if two
+lights overlap or a light isn't in any group.
+
+**Groups** (right) — click **Add group**, name it, choose where its colour comes from, and tick the
+lights that belong to it. A light can be in more than one group.
+
+<p align="center">
+  <img src="docs/images/lights-groups.png" width="760"
+       alt="The Lights and groups editor: five named lights with their DMX channels on the left, groups on the right with a source picker and tick boxes choosing which lights belong to the selected group">
+</p>
+
+For example:
+
+| Light | Channel | | Group | Lights | Colour from |
+|---|---|---|---|---|---|
+| Left Front | 9 | | Front Wash | Left Front, Centre, Right Front | Follow screen |
+| Centre | 6 | | Side Wash | Left Side, Right Side | Manual |
+| Right Front | 12 | | | | |
+
+Upgrading from an earlier version? Your existing patch is converted automatically into one light in
+one group called *All lights*, keeping the mode you left it in — everything behaves as before until
+you add more.
+
+### Checking your patch
+
+Two tools, both of which ignore groups and transmit even when the **Output** toggle is off:
+
+- **Test lights** (bottom-left of Settings) walks the whole rig **one fixture at a time**, showing
+  the name of the light currently lit — *Lighting: Left Front (1 of 3)*. Every other light is held
+  dark, so you can look at the stage and confirm each name really is the light you think it is.
+  Click again to stop.
+- **Flash** (in *Lights & groups*, next to Add/Remove) does the same for the single selected light.
+  It uses the channel **currently typed in the box**, not the saved one — so you can try a channel
+  and see where it lands before committing.
+
+Each light steps through **red, green, blue, then white**. The primaries matter: a fixture patched
+one channel out still lights up, but shows the wrong colours, which a plain white flash would hide.
+
+If every light comes up in the right place with the right colours, you're patched correctly.
+
+## Remote control (Stream Deck / Companion)
+
+Slide Colours can expose a small HTTP API so [Bitfocus Companion](https://bitfocus.io/companion)
+can recall scenes and toggle output from a Stream Deck, alongside your camera and audio buttons.
+
+It's **off by default**. Turn it on in **Settings → Remote control (Stream Deck)**.
+
+### Setting it up
+
+1. Tick **Let Bitfocus Companion / Stream Deck recall scenes**, then **Save**. An access key is
+   generated for you the first time.
+2. Browse to the address shown in Settings — e.g. `http://192.168.1.50:7373/`. That page lists the
+   exact, ready-to-paste URL for every scene you've created. It's also the quickest way to confirm
+   Companion's machine can reach the booth PC at all.
+3. In Companion, add a **Generic: HTTP Requests** connection.
+4. On a button, add the action **GET** and paste one of those URLs.
+
+### Endpoints
+
+| Request | Does |
+|---|---|
+| `GET /` | Human-readable page listing the URLs for your scenes |
+| `GET /scene/{name}` | Recalls that scene. Name matching ignores case; URL-encode spaces (`Front%20Wash`) |
+| `GET /output/on` · `/output/off` · `/output/toggle` | Turns DMX output on or off — a blackout button |
+| `GET /status` | JSON: `{"output":true,"active":"Worship","scenes":["Worship","Preach"]}` |
+
+Every request needs `?key=yourkey` (or an `X-Api-Key` header) unless you clear the key.
+
+Companion's generic HTTP module fires actions but doesn't easily read responses back, so buttons
+won't automatically light up to show the active scene. `/status` returns everything needed if you
+want to drive feedback yourself — and it's the same API a proper Companion module would use, if one
+is ever written.
+
+### Security
+
+The listener accepts connections from anywhere on your network, so **anyone on the church Wi-Fi who
+knows the address and key can change your stage lighting.** That's the trade-off for driving it from
+a separate Companion machine.
+
+- Keep the access key. Clearing it makes the API open to anyone who can reach the port — Settings
+  warns you when it's empty.
+- Use **New** to roll the key if it leaks; Companion buttons then need the new URL.
+- Turn the whole thing off when you're not using it.
+- It's plain HTTP, not HTTPS — fine on a trusted LAN, but don't port-forward it to the internet.
 
 ## Good to know
 
@@ -160,7 +306,10 @@ If they do, you're patched correctly.
   says so if it happens; fix it in *Windows Settings → System → Display → Graphics*.
 - When toggled **off**, the app stops sending DMX entirely (it doesn't send blackout), so a
   console merging via HTP/LTP will simply take back control.
-- Settings and your ten favourite colours live in `%APPDATA%\SlideColours\settings.json`.
+- While it *is* sending, channels that don't belong to any of your lights are sent as 0. Patch your
+  lights so they don't collide with fixtures you drive from a console on the same universe.
+- All groups share one universe. Lights spanning multiple universes aren't supported yet.
+- Settings, your rig, and your ten favourite colours live in `%APPDATA%\SlideColours\settings.json`.
 
 ## Deploying to another PC
 
@@ -169,6 +318,12 @@ For almost everyone this just means: **download the self-contained exe from the
 across.** It bundles the .NET 8 runtime, so it runs on a bare, clean Windows 10/11 with **nothing
 preinstalled** — ideal for a shared or locked-down machine like a church booth PC. To update it,
 replace the file with a newer release.
+
+To carry your configuration across rather than re-entering it, use **Settings → Save to file…** on
+the machine that's already set up, copy the `.json` over, and use **Load from file…** on the new
+one. That brings the whole patch — lights, groups, protocol, universe and colour behaviour. The
+pill's on-screen position is deliberately *not* imported, so it can't land off-screen on a machine
+with a different monitor layout.
 
 Prefer a tiny (~1 MB) download instead? Build the *framework-dependent* variant yourself (see
 [Building from source](#building-from-source)). It needs the

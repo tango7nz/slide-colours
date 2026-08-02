@@ -31,21 +31,45 @@
                          ToolTip="An update is available — open Settings to install"/>
             </Grid>
 
-            <!-- favourite colours -->
+            <!-- saved looks: picking one sets every group at once -->
+            <TextBlock Text="Scene:" Foreground="#FFB8B8C0"
+                       FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                       Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <ComboBox x:Name="ScenePicker" Style="{StaticResource PillComboBox}"
+                      Width="140" VerticalAlignment="Center"
+                      SelectionChanged="ScenePicker_SelectionChanged"
+                      ToolTip="Recall a saved look. Shows “—” once anything is changed by hand."/>
+
+            <!-- which group of lights the controls to the right act on -->
+            <TextBlock Text="Group:" Foreground="#FFB8B8C0"
+                       FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                       Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <ComboBox x:Name="GroupPicker" Style="{StaticResource PillComboBox}"
+                      Width="150" VerticalAlignment="Center"
+                      SelectionChanged="GroupPicker_SelectionChanged"
+                      ToolTip="The group of lights these controls change. Other groups keep running on their own source."/>
+
+            <!-- favourite colours: clicking one holds it on the selected group -->
             <WrapPanel x:Name="FavouritePanel" VerticalAlignment="Center"
                        MaxWidth="220" Margin="8,0,0,0"/>
 
-            <!-- colour mode: follow the live slide (disabled when ProPresenter isn't connected) -->
+            <!-- colour source for the selected group: the live slide (needs ProPresenter connected) -->
             <Button x:Name="FollowSlideButton" Style="{StaticResource ModeButton}"
                     Content="Follow slide" VerticalAlignment="Center" Margin="8,0,0,0"
                     Click="FollowSlide_Click" ToolTipService.ShowOnDisabled="True"
-                    ToolTip="Match the stage colour to the live slide"/>
+                    ToolTip="Match this group to the live slide"/>
 
-            <!-- colour mode: sample a display continuously, for animated backgrounds -->
+            <!-- colour source: sample a display continuously, for animated backgrounds -->
             <Button x:Name="FollowScreenButton" Style="{StaticResource ModeButton}"
                     Content="Follow screen" VerticalAlignment="Center" Margin="4,0,0,0"
                     Click="FollowScreen_Click" ToolTipService.ShowOnDisabled="True"
-                    ToolTip="Match the stage colour to a display, live"/>
+                    ToolTip="Match this group to a display, live"/>
+
+            <!-- colour source: hold this group dark while the others keep running -->
+            <Button x:Name="GroupOffButton" Style="{StaticResource ModeButton}"
+                    Content="Off" VerticalAlignment="Center" Margin="4,0,0,0"
+                    Click="GroupOff_Click" ToolTipService.ShowOnDisabled="True"
+                    ToolTip="Hold this group dark"/>
 
             <TextBlock Text="Output:" Foreground="#FFB8B8C0"
                        FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"

@@ -7,6 +7,7 @@ using SlideColours.Services;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfColor = System.Windows.Media.Color;
 using WpfButton = System.Windows.Controls.Button;
+using WpfComboBoxItem = System.Windows.Controls.ComboBoxItem;
 using WpfColorConverter = System.Windows.Media.ColorConverter;
 
 namespace SlideColours;
@@ -18,23 +19,27 @@ public partial class MainWindow : Window
     private readonly ProPresenterClient _client;
     private readonly ScreenColourSource _screen;
     private readonly UpdateService _update;
+    private readonly RemoteControlServer _remote;
 
     private bool _connected;
-    private ColourMode _mode = ColourMode.Slide;
     private string? _captureStatus;
+
+    /// <summary>Set while the group picker is being repopulated, so its handler doesn't fire back.</summary>
+    private bool _suspend;
 
     private static readonly WpfBrush ModeActiveBrush = new SolidColorBrush(WpfColor.FromRgb(0x3A, 0x6F, 0xF0));
     private static readonly WpfBrush ModeMutedBrush = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0xB8, 0xC0));
     private static readonly WpfBrush ModeFaintBorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
 
     public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
-        ScreenColourSource screen, UpdateService update)
+        ScreenColourSource screen, UpdateService update, RemoteControlServer remote)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
         _screen = screen;
         _update = update;
+        _remote = remote;
 
         InitializeComponent();
         RestorePosition();
@@ -48,15 +53,15 @@ public partial class MainWindow : Window
             UpdateBadge.Visibility = Visibility.Visible);
 
         EnableToggle.IsChecked = _engine.Enabled;
-        _mode = _engine.Mode;
         _connected = _client.Connected;
         _captureStatus = _screen.Status;
-        RefreshModeButtons();
+        RebuildGroupPicker();
+        RefreshScenePicker();
 
-        _engine.ModeChanged += mode => Dispatcher.BeginInvoke(() =>
+        _engine.GroupsChanged += () => Dispatcher.BeginInvoke(() =>
         {
-            _mode = mode;
-            RefreshModeButtons();
+            RebuildGroupPicker();
+            RefreshScenePicker();
         });
 
         _client.ConnectionChanged += connected => Dispatcher.BeginInvoke(() =>
@@ -82,8 +87,14 @@ public partial class MainWindow : Window
             ColourSwatch.ToolTip = error ?? "Current output colour";
         });
 
-        // Size isn't known until the pill has laid out; keep it fully on-screen.
-        Loaded += (_, _) => ClampToScreen();
+        // The engine has been running since startup, so ask it to re-announce where it got to.
+        _engine.ResendOutputState();
+
+        // The pill sizes to its content, and that content settles over several layout passes — a
+        // one-shot clamp at Loaded can run against a width that is still growing and leave the
+        // right-hand end off-screen. Re-clamping on every size change is cheap and can't loop,
+        // since it only ever moves the window.
+        SizeChanged += (_, _) => ClampToScreen();
     }
 
     private void ClampToScreen()
@@ -156,33 +167,146 @@ public partial class MainWindow : Window
         _engine.Enabled = EnableToggle.IsChecked == true;
     }
 
-    private void FollowSlide_Click(object sender, RoutedEventArgs e) => _engine.SetMode(ColourMode.Slide);
+    /// <summary>
+    /// Lists the saved scenes and highlights whichever one the stage currently matches. The first
+    /// entry is a dash, shown whenever the live state doesn't match any scene — so the picker never
+    /// claims a look is loaded after the operator has nudged something by hand.
+    /// </summary>
+    private void RefreshScenePicker()
+    {
+        _suspend = true;
+        ScenePicker.Items.Clear();
+        ScenePicker.Items.Add(new WpfComboBoxItem { Tag = "", Content = "—" });
+        foreach (var scene in _settings.Scenes)
+            ScenePicker.Items.Add(new WpfComboBoxItem { Tag = scene.Id, Content = scene.DisplayName });
 
-    private void FollowScreen_Click(object sender, RoutedEventArgs e) => _engine.SetMode(ColourMode.Screen);
+        var live = _settings.Scenes.FirstOrDefault(_engine.MatchesScene);
+        int index = live == null ? 0 : _settings.Scenes.FindIndex(s => s.Id == live.Id) + 1;
+        ScenePicker.SelectedIndex = index;
+        _suspend = false;
+
+        bool any = _settings.Scenes.Count > 0;
+        ScenePicker.IsEnabled = any;
+        ScenePicker.ToolTip = !any
+            ? "No scenes yet — create them in Settings → Scenes"
+            : live != null
+                ? $"The stage matches “{live.DisplayName}”"
+                : "Changed by hand — pick a scene to restore a saved look";
+    }
+
+    private void ScenePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suspend)
+            return;
+
+        // Selecting the dash means "no scene"; there's nothing sensible to restore, so leave the
+        // lights alone rather than blacking the stage out mid-service.
+        if ((ScenePicker.SelectedItem as WpfComboBoxItem)?.Tag is not string id || id.Length == 0)
+            return;
+
+        if (_settings.Scenes.FirstOrDefault(s => s.Id == id) is { } scene)
+            _engine.ApplyScene(scene);
+    }
+
+    /// <summary>The group the pill's controls act on, or null when the rig has no groups.</summary>
+    private string? ActiveGroupId => (GroupPicker.SelectedItem as WpfComboBoxItem)?.Tag as string;
+
+    private void RebuildGroupPicker()
+    {
+        _suspend = true;
+        GroupPicker.Items.Clear();
+        foreach (var group in _settings.Groups)
+            GroupPicker.Items.Add(new WpfComboBoxItem { Tag = group.Id, Content = group.DisplayName });
+
+        GroupPicker.IsEnabled = _settings.Groups.Count > 0;
+        if (_settings.Groups.Count == 0)
+        {
+            GroupPicker.Items.Add(new WpfComboBoxItem { Tag = null, Content = "No groups" });
+            GroupPicker.SelectedIndex = 0;
+        }
+        else
+        {
+            int index = _settings.Groups.FindIndex(g => g.Id == _engine.ActiveGroupId);
+            GroupPicker.SelectedIndex = index < 0 ? 0 : index;
+        }
+        _suspend = false;
+
+        // Selecting index 0 above may not raise SelectionChanged, so sync the engine explicitly.
+        if (ActiveGroupId is { } id)
+            _engine.ActiveGroupId = id;
+        RefreshModeButtons();
+    }
+
+    private void GroupPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suspend || ActiveGroupId is not { } id)
+            return;
+        _engine.ActiveGroupId = id;
+        RefreshModeButtons();
+    }
+
+    private void SetActiveGroupSource(string source)
+    {
+        if (ActiveGroupId is { } id)
+            _engine.SetGroupSource(id, source);
+    }
+
+    private void FollowSlide_Click(object sender, RoutedEventArgs e) => SetActiveGroupSource(ColourSources.Slide);
+
+    private void FollowScreen_Click(object sender, RoutedEventArgs e) => SetActiveGroupSource(ColourSources.Screen);
+
+    private void GroupOff_Click(object sender, RoutedEventArgs e) => SetActiveGroupSource(ColourSources.Off);
 
     private void RefreshModeButtons()
     {
+        string? groupId = ActiveGroupId;
+        string source = groupId == null ? "" : _engine.SourceOf(groupId);
+        string group = groupId == null
+            ? ""
+            : _settings.Groups.FirstOrDefault(g => g.Id == groupId)?.DisplayName ?? "";
+        bool hasGroup = groupId != null;
+
         // Following slides is only possible while ProPresenter is connected. Screen capture needs
         // nothing but a display, so that button is always available.
-        FollowSlideButton.IsEnabled = _connected;
-        Highlight(FollowSlideButton, _mode == ColourMode.Slide);
-        FollowSlideButton.ToolTip = !_connected
-            ? $"ProPresenter not connected ({_settings.ProPresenterHost}:{_settings.ProPresenterPort}) — slide following unavailable"
-            : _mode == ColourMode.Slide
-                ? "Following the live slide"
-                : "Click to match the stage colour to the live slide";
+        FollowSlideButton.IsEnabled = hasGroup && _connected;
+        Highlight(FollowSlideButton, source == ColourSources.Slide);
+        FollowSlideButton.ToolTip = !hasGroup
+            ? "Add a group in Settings → Lights & groups"
+            : !_connected
+                ? $"ProPresenter not connected ({_settings.ProPresenterHost}:{_settings.ProPresenterPort}) — slide following unavailable"
+                : source == ColourSources.Slide
+                    ? $"{group} is following the live slide"
+                    : $"Click to match {group} to the live slide";
 
-        Highlight(FollowScreenButton, _mode == ColourMode.Screen);
+        FollowScreenButton.IsEnabled = hasGroup;
+        Highlight(FollowScreenButton, source == ColourSources.Screen);
         FollowScreenButton.ToolTip = _captureStatus
-            ?? (_mode == ColourMode.Screen
-                ? $"Following {DisplayName()} live — animated backgrounds included"
-                : $"Click to match the stage colour to {DisplayName()}, continuously");
+            ?? (!hasGroup
+                ? "Add a group in Settings → Lights & groups"
+                : source == ColourSources.Screen
+                    ? $"{group} is following {DisplayName()} live — animated backgrounds included"
+                    : $"Click to match {group} to {DisplayName()}, continuously");
+
+        GroupOffButton.IsEnabled = hasGroup;
+        Highlight(GroupOffButton, source == ColourSources.Off);
+        GroupOffButton.ToolTip = !hasGroup
+            ? "Add a group in Settings → Lights & groups"
+            : source == ColourSources.Off
+                ? $"{group} is held dark"
+                : $"Click to hold {group} dark — other groups keep running";
+
+        // The swatches set a manual colour, which is a source in its own right.
+        foreach (var button in FavouritePanel.Children.OfType<WpfButton>())
+        {
+            button.IsEnabled = hasGroup;
+            button.BorderBrush = source == ColourSources.Manual ? ModeActiveBrush : ModeFaintBorderBrush;
+        }
     }
 
     private string DisplayName() =>
         string.IsNullOrWhiteSpace(_settings.CaptureDisplay)
             ? "the main display"
-            : _settings.CaptureDisplay.TrimStart('\\', '.').Replace("DISPLAY", "display ");
+            : MonitorInfo.Describe(_settings.CaptureDisplay, null);
 
     private static void Highlight(WpfButton button, bool active)
     {
@@ -259,7 +383,8 @@ public partial class MainWindow : Window
         // Hand the colour to the engine and let its OutputChanged callback drive the
         // swatch as it fades. Setting the swatch here as well makes it flash the target
         // colour and then jump back to the fading value on the next frame.
-        _engine.SetManualColour(colour);
+        if (ActiveGroupId is { } id)
+            _engine.SetGroupManualColour(id, colour);
     }
 
     private void RefreshFavouriteButtons()
@@ -293,8 +418,10 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings, _engine, _client, _screen, _update) { Owner = this };
+        var dialog = new SettingsWindow(_settings, _engine, _client, _screen, _update, _remote) { Owner = this };
         dialog.ShowDialog();
+        RebuildGroupPicker();
+        RefreshScenePicker();
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

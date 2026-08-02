@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.IO;
 using System.IO.Ports;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using SlideColours.Models;
 using SlideColours.Services;
 using WpfComboBox = System.Windows.Controls.ComboBox;
@@ -17,50 +19,79 @@ public partial class SettingsWindow : Window
     private readonly ProPresenterClient _client;
     private readonly ScreenColourSource _screen;
     private readonly UpdateService _update;
+    private readonly RemoteControlServer _remote;
     private bool _loaded;
 
     public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
-        ScreenColourSource screen, UpdateService update)
+        ScreenColourSource screen, UpdateService update, RemoteControlServer remote)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
         _screen = screen;
         _update = update;
+        _remote = remote;
 
         InitializeComponent();
 
         VersionText.Text = $"Current version: {UpdateService.CurrentVersion.ToString(3)}";
-        AutoCheckUpdatesCheck.IsChecked = settings.AutoCheckForUpdates;
         ShowUpdateState(_update.Available);
+        ShowSettingsFilePath();
+        LoadFromSettings();
+    }
 
-        HostBox.Text = settings.ProPresenterHost;
-        PortBox.Text = settings.ProPresenterPort.ToString();
+    /// <summary>
+    /// Pushes every value from <see cref="_settings"/> into the controls. Called on open and again
+    /// after a settings file is loaded, so the dialog can't drift out of step with what's stored.
+    /// </summary>
+    private void LoadFromSettings()
+    {
+        _loaded = false;
 
-        SelectByTag(ProtocolBox, settings.Protocol);
-        TargetIpBox.Text = settings.TargetIp;
-        UniverseBox.Text = settings.Universe.ToString();
-        StartChannelBox.Text = settings.StartChannel.ToString();
-        DimmerCheck.IsChecked = settings.HasMasterDimmer;
+        AutoCheckUpdatesCheck.IsChecked = _settings.AutoCheckForUpdates;
 
+        HostBox.Text = _settings.ProPresenterHost;
+        PortBox.Text = _settings.ProPresenterPort.ToString();
+
+        SelectByTag(ProtocolBox, _settings.Protocol);
+        TargetIpBox.Text = _settings.TargetIp;
+        UniverseBox.Text = _settings.Universe.ToString();
+        RefreshRigSummary();
+
+        ComPortBox.Items.Clear();
         foreach (var name in SerialPort.GetPortNames().Distinct().OrderBy(n => n))
             ComPortBox.Items.Add(name);
-        ComPortBox.Text = settings.ComPort;
+        ComPortBox.Text = _settings.ComPort;
 
         PopulateDisplays();
-        SmoothingBox.Text = settings.CaptureSmoothingMs.ToString();
-        SelectByTag(CaptureFpsBox, settings.CaptureFps.ToString(), "30");
+        SmoothingBox.Text = _settings.CaptureSmoothingMs.ToString();
+        SelectByTag(CaptureFpsBox, _settings.CaptureFps.ToString(), "30");
 
-        FadeBox.Text = settings.FadeMs.ToString();
-        BrightnessSlider.Value = settings.BrightnessPercent;
-        SaturationSlider.Value = settings.SaturationBoostPercent;
-        FullBrightnessCheck.IsChecked = settings.FullBrightnessColours;
-        SelectByTag(FallbackBox, settings.Fallback);
-        StartEnabledCheck.IsChecked = settings.StartEnabled;
+        FadeBox.Text = _settings.FadeMs.ToString();
+        BrightnessSlider.Value = _settings.BrightnessPercent;
+        SaturationSlider.Value = _settings.SaturationBoostPercent;
+        FullBrightnessCheck.IsChecked = _settings.FullBrightnessColours;
+        SelectByTag(FallbackBox, _settings.Fallback);
+        StartEnabledCheck.IsChecked = _settings.StartEnabled;
+        PopulateStartupGroups();
+        PopulateStartupScenes();
+
+        RemoteEnabledCheck.IsChecked = _settings.RemoteEnabled;
+        RemotePortBox.Text = _settings.RemotePort.ToString();
+        RemoteKeyBox.Text = _settings.RemoteKey;
 
         _loaded = true;
         UpdateSliderLabels();
         UpdateProtocolFields();
+        UpdateRemoteFields();
+
+        _engine.TestFixtureChanged += OnTestFixtureChanged;
+        Closed += (_, _) =>
+        {
+            // Without the name readout a running chase is just unexplained flashing, so stop it.
+            _engine.TestFixtureChanged -= OnTestFixtureChanged;
+            _engine.StopPatchTest();
+        };
     }
 
     private static void SelectByTag(WpfComboBox box, string tag, string? fallbackTag = null)
@@ -85,6 +116,7 @@ public partial class SettingsWindow : Window
     /// </summary>
     private void PopulateDisplays()
     {
+        CaptureDisplayBox.Items.Clear();
         CaptureDisplayBox.Items.Add(new WpfComboBoxItem { Tag = "", Content = "Main display (primary screen)" });
 
         foreach (var display in DesktopDuplicator.List())
@@ -96,7 +128,11 @@ public partial class SettingsWindow : Window
         if (!string.IsNullOrWhiteSpace(saved)
             && !CaptureDisplayBox.Items.Cast<WpfComboBoxItem>().Any(i => (string)i.Tag == saved))
         {
-            CaptureDisplayBox.Items.Add(new WpfComboBoxItem { Tag = saved, Content = $"{saved} (not connected)" });
+            CaptureDisplayBox.Items.Add(new WpfComboBoxItem
+            {
+                Tag = saved,
+                Content = MonitorInfo.Describe(saved, "not connected"),
+            });
         }
 
         SelectByTag(CaptureDisplayBox, saved);
@@ -104,6 +140,28 @@ public partial class SettingsWindow : Window
 
     private static string SelectedTag(WpfComboBox box) =>
         (box.SelectedItem as WpfComboBoxItem)?.Tag as string ?? "";
+
+    /// <summary>
+    /// Lists the groups that can be pre-selected on launch. A blank tag keeps the old behaviour of
+    /// reopening on whichever group was in use when the app was last closed.
+    /// </summary>
+    /// <param name="keepSelection">
+    /// True after editing the rig, where the user's unsaved choice in this box should survive.
+    /// False when the settings themselves have just changed underneath us.
+    /// </param>
+    private void PopulateStartupGroups(bool keepSelection = false)
+    {
+        string wanted = keepSelection && SelectedTag(StartupGroupBox) is { Length: > 0 } chosen
+            ? chosen
+            : _settings.StartupGroupId;
+
+        StartupGroupBox.Items.Clear();
+        StartupGroupBox.Items.Add(new WpfComboBoxItem { Tag = "", Content = "Last used" });
+        foreach (var group in _settings.Groups)
+            StartupGroupBox.Items.Add(new WpfComboBoxItem { Tag = group.Id, Content = group.DisplayName });
+
+        SelectByTag(StartupGroupBox, wanted);
+    }
 
     private void ProtocolBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -123,6 +181,52 @@ public partial class SettingsWindow : Window
         UniverseBox.Visibility = network;
         ComPortLabel.Visibility = com;
         ComPortBox.Visibility = com;
+    }
+
+    private void RemoteEnabled_Changed(object sender, RoutedEventArgs e)
+    {
+        // Turning it on for the first time mints a key, so the listener is never silently open to
+        // the whole network. Clearing the box afterwards is an explicit opt-out.
+        if (_loaded && RemoteEnabledCheck.IsChecked == true && RemoteKeyBox.Text.Trim().Length == 0)
+            RemoteKeyBox.Text = NewKey();
+
+        if (_loaded)
+            UpdateRemoteFields();
+    }
+
+    private void RemoteKey_Click(object sender, RoutedEventArgs e)
+    {
+        RemoteKeyBox.Text = NewKey();
+        UpdateRemoteFields();
+    }
+
+    private static string NewKey() => Guid.NewGuid().ToString("N")[..12];
+
+    private void UpdateRemoteFields()
+    {
+        bool on = RemoteEnabledCheck.IsChecked == true;
+        RemotePortLabel.IsEnabled = on;
+        RemotePortBox.IsEnabled = on;
+        RemoteKeyLabel.IsEnabled = on;
+        RemoteKeyPanel.IsEnabled = on;
+
+        if (!on)
+        {
+            RemoteHintText.Text = "Off — nothing on the network can control this app.";
+            return;
+        }
+
+        string key = RemoteKeyBox.Text.Trim();
+        string suffix = key.Length > 0 ? $"?key={key}" : "";
+        string port = RemotePortBox.Text.Trim() is { Length: > 0 } p ? p : "7373";
+        string url = $"http://{RemoteControlServer.LocalAddress()}:{port}";
+
+        RemoteHintText.Text =
+            $"Open {url}/ in a browser for the list of URLs to paste into Companion.\n"
+            + $"Recall a scene with {url}/scene/YourSceneName{suffix}"
+            + (key.Length == 0
+                ? "\n\nNo access key: anyone on this network can control the lights."
+                : "");
     }
 
     private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -155,12 +259,6 @@ public partial class SettingsWindow : Window
             return false;
         }
 
-        if (!int.TryParse(StartChannelBox.Text.Trim(), out int startChannel) || startChannel < 1 || startChannel > 512)
-        {
-            WpfMessageBox.Show(this, "Start channel must be between 1 and 512.", "Slide Colours");
-            return false;
-        }
-
         if (!int.TryParse(FadeBox.Text.Trim(), out int fadeMs) || fadeMs < 0)
             fadeMs = _settings.FadeMs;
 
@@ -169,8 +267,17 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(SelectedTag(CaptureFpsBox), out int captureFps))
             captureFps = _settings.CaptureFps;
 
+        if (!int.TryParse(RemotePortBox.Text.Trim(), out int remotePort) || remotePort < 1 || remotePort > 65535)
+        {
+            WpfMessageBox.Show(this, "The remote control port must be between 1 and 65535.", "Slide Colours");
+            return false;
+        }
+
         bool endpointChanged = _settings.ProPresenterHost != HostBox.Text.Trim()
                             || _settings.ProPresenterPort != port;
+        bool remoteChanged = _settings.RemoteEnabled != (RemoteEnabledCheck.IsChecked == true)
+                          || _settings.RemotePort != remotePort
+                          || _settings.RemoteKey != RemoteKeyBox.Text.Trim();
         bool displayChanged = _settings.CaptureDisplay != SelectedTag(CaptureDisplayBox);
 
         _settings.ProPresenterHost = HostBox.Text.Trim();
@@ -178,8 +285,6 @@ public partial class SettingsWindow : Window
         _settings.Protocol = protocol;
         _settings.TargetIp = TargetIpBox.Text.Trim();
         _settings.Universe = universe;
-        _settings.StartChannel = startChannel;
-        _settings.HasMasterDimmer = DimmerCheck.IsChecked == true;
         _settings.ComPort = ComPortBox.Text.Trim();
         _settings.CaptureDisplay = SelectedTag(CaptureDisplayBox);
         _settings.CaptureSmoothingMs = smoothingMs;
@@ -189,15 +294,26 @@ public partial class SettingsWindow : Window
         _settings.SaturationBoostPercent = (int)SaturationSlider.Value;
         _settings.FullBrightnessColours = FullBrightnessCheck.IsChecked == true;
         _settings.Fallback = SelectedTag(FallbackBox);
+        _settings.RemoteEnabled = RemoteEnabledCheck.IsChecked == true;
+        _settings.RemotePort = remotePort;
+        _settings.RemoteKey = RemoteKeyBox.Text.Trim();
         _settings.StartEnabled = StartEnabledCheck.IsChecked == true;
+        _settings.StartupGroupId = SelectedTag(StartupGroupBox);
+        _settings.StartupSceneId = SelectedTag(StartupSceneBox);
         _settings.AutoCheckForUpdates = AutoCheckUpdatesCheck.IsChecked == true;
 
         _settings.Save();
-        _engine.RefreshOutput();
+        _engine.ReloadRig();
         if (endpointChanged)
             _client.Reconnect();
         if (displayChanged)
             _screen.Restart();
+        if (remoteChanged)
+        {
+            _remote.Restart();
+            if (_remote.Status is { } problem)
+                WpfMessageBox.Show(this, problem, "Slide Colours", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
 
         return true;
     }
@@ -233,8 +349,178 @@ public partial class SettingsWindow : Window
 
     private void Test_Click(object sender, RoutedEventArgs e)
     {
-        if (Apply())
-            _engine.RunTestSweep();
+        if (_engine.TestRunning)
+        {
+            _engine.StopPatchTest();
+            return;
+        }
+
+        if (!Apply())
+            return;
+
+        if (_settings.Fixtures.Count == 0)
+        {
+            WpfMessageBox.Show(this, "Add a light in Lights & groups first.", "Slide Colours");
+            return;
+        }
+
+        _engine.RunPatchTest(_settings.Fixtures);
+    }
+
+    private void OnTestFixtureChanged(Fixture? fixture) =>
+        Dispatcher.BeginInvoke(() => ShowTestFixture(fixture));
+
+    /// <summary>
+    /// Names the light currently lit by the patch test, so you can match what's on stage to what's
+    /// in the rig. Null means the test has finished or been stopped.
+    /// </summary>
+    private void ShowTestFixture(Fixture? fixture)
+    {
+        if (fixture == null)
+        {
+            TestButton.Content = "Test lights";
+            TestStatusText.Text = "";
+            return;
+        }
+
+        int position = _settings.Fixtures.FindIndex(f => f.Id == fixture.Id) + 1;
+        string where = position > 0 && _settings.Fixtures.Count > 1
+            ? $"  ({position} of {_settings.Fixtures.Count})"
+            : "";
+        TestButton.Content = "Stop test";
+        TestStatusText.Text = $"Lighting: {fixture.Name}{where}";
+    }
+
+    /// <param name="keepSelection">See <see cref="PopulateStartupGroups"/>.</param>
+    private void PopulateStartupScenes(bool keepSelection = false)
+    {
+        string wanted = keepSelection && SelectedTag(StartupSceneBox) is { Length: > 0 } chosen
+            ? chosen
+            : _settings.StartupSceneId;
+
+        StartupSceneBox.Items.Clear();
+        StartupSceneBox.Items.Add(new WpfComboBoxItem { Tag = "", Content = "Don't recall a scene" });
+        foreach (var scene in _settings.Scenes)
+            StartupSceneBox.Items.Add(new WpfComboBoxItem { Tag = scene.Id, Content = scene.DisplayName });
+
+        SelectByTag(StartupSceneBox, wanted);
+    }
+
+    private void Scenes_Click(object sender, RoutedEventArgs e)
+    {
+        // The scene editor saves straight through and captures the live rig, so apply this dialog's
+        // pending edits first — otherwise its Save would persist stale values from around it.
+        if (!Apply())
+            return;
+
+        var dialog = new SceneWindow(_settings, _engine) { Owner = this };
+        if (dialog.ShowDialog() == true)
+            PopulateStartupScenes(keepSelection: true);
+    }
+
+    private void ShowSettingsFilePath() =>
+        SettingsPathText.Text = $"Currently using {AppSettings.CurrentFilePath}";
+
+    private void SaveToFile_Click(object sender, RoutedEventArgs e)
+    {
+        // Write what's on screen, not what was last saved.
+        if (!Apply())
+            return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save Slide Colours settings",
+            FileName = $"SlideColours-settings-{DateTime.Now:yyyy-MM-dd}.json",
+            DefaultExt = ".json",
+            Filter = "Slide Colours settings (*.json)|*.json|All files (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            _settings.SaveTo(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            WpfMessageBox.Show(this, $"Couldn't save that file:\n\n{ex.Message}", "Slide Colours",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void LoadFromFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Load Slide Colours settings",
+            DefaultExt = ".json",
+            Filter = "Slide Colours settings (*.json)|*.json|All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        AppSettings loaded;
+        try
+        {
+            loaded = AppSettings.LoadFrom(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            WpfMessageBox.Show(this, $"Couldn't read that file:\n\n{ex.Message}", "Slide Colours",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var confirm = WpfMessageBox.Show(this,
+            $"Replace all current settings with {Path.GetFileName(dialog.FileName)}?\n\n" +
+            $"This file has {loaded.Fixtures.Count} light(s) in {loaded.Groups.Count} group(s). " +
+            "Your current lights, groups and settings will be overwritten.",
+            "Slide Colours", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.OK)
+            return;
+
+        // Where the pill sits belongs to this screen, not to the config — importing a position from
+        // another machine could drop it off-screen.
+        double left = _settings.WindowLeft, top = _settings.WindowTop;
+        _settings.CopyFrom(loaded);
+        _settings.WindowLeft = left;
+        _settings.WindowTop = top;
+
+        _settings.Save();
+        _engine.ReloadRig();
+        _client.Reconnect();
+        _screen.Restart();
+
+        LoadFromSettings();
+    }
+
+    private void Rig_Click(object sender, RoutedEventArgs e)
+    {
+        // The rig editor saves straight through, so the rest of this dialog's fields are applied
+        // first — otherwise its Save would persist settings that still hold the old values.
+        if (!Apply())
+            return;
+
+        var dialog = new RigWindow(_settings, _engine) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            RefreshRigSummary();
+            // Groups may have been renamed, added or deleted underneath this dialog, and deleting
+            // one prunes it out of every scene.
+            PopulateStartupGroups(keepSelection: true);
+            PopulateStartupScenes(keepSelection: true);
+        }
+    }
+
+    private void RefreshRigSummary()
+    {
+        int lights = _settings.Fixtures.Count;
+        int groups = _settings.Groups.Count;
+        int scenes = _settings.Scenes.Count;
+        RigSummaryText.Text = $"{lights} {(lights == 1 ? "light" : "lights")}, "
+                            + $"{groups} {(groups == 1 ? "group" : "groups")}, "
+                            + $"{scenes} {(scenes == 1 ? "scene" : "scenes")}";
     }
 
     private void ShowUpdateState(UpdateInfo? info)

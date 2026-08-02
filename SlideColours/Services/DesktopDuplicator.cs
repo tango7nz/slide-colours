@@ -7,15 +7,30 @@ public sealed record CaptureDisplay(string DeviceName, int Left, int Top, int Wi
 {
     public bool IsPrimary => Left == 0 && Top == 0;
 
-    /// <summary>e.g. "Display 2 — 1920×1080 at 1920,0" — enough to tell monitors apart in a list.</summary>
+    /// <summary>"Display 2" — the number Windows shows in its own display settings.</summary>
+    public string ShortName => MonitorInfo.ShortName(DeviceName);
+
+    /// <summary>
+    /// e.g. "Display 2 — BenQ TK800M, HDMI (1920×1080)". The monitor's own name and the cable it's
+    /// on are what make this usable in a dark booth; a number and a size don't tell you which
+    /// projector is which.
+    ///
+    /// Both the name and the size come from Windows rather than DXGI — see <see cref="MonitorInfo"/>
+    /// for why DXGI's own rectangle can't be trusted for this.
+    /// </summary>
     public string Label
     {
         get
         {
-            string digits = new(DeviceName.Where(char.IsDigit).ToArray());
-            string name = digits.Length > 0 ? $"Display {digits}" : DeviceName;
-            string where = IsPrimary ? " (primary)" : $" at {Left},{Top}";
-            return $"{name} — {Width}×{Height}{where}";
+            var monitor = MonitorInfo.Describe(DeviceName);
+            var size = MonitorInfo.Resolution(DeviceName);
+            string pixels = size is { } s ? $"{s.Width}×{s.Height}" : $"{Width}×{Height}";
+
+            string? who = monitor.Name is { } n && monitor.Connection is { } c ? $"{n}, {c}"
+                        : monitor.Name ?? monitor.Connection;
+
+            string detail = who is null ? pixels : $"{who} ({pixels})";
+            return IsPrimary ? $"{ShortName} — {detail}, primary" : $"{ShortName} — {detail}";
         }
     }
 }
