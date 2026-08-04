@@ -68,6 +68,7 @@ default). From left to right:
 - **Cog** — opens *Settings…*.
 - **Scene** — recalls a saved look, setting every group at once. Shows **—** whenever the stage
   doesn't match any scene, so it never claims a look is loaded after you've nudged something by hand.
+  If two scenes describe an identical look, it shows the one you actually recalled.
 - **Group** — picks which group of lights the rest of the pill controls. Every group keeps running
   on its own source; this only chooses the one you're about to change.
 - **Favourite colours** — ten preset swatches:
@@ -257,9 +258,9 @@ It's **off by default**. Turn it on in **Settings → Remote control (Stream Dec
 
 1. Tick **Let Bitfocus Companion / Stream Deck recall scenes**, then **Save**. An access key is
    generated for you the first time.
-2. Browse to the address shown in Settings — e.g. `http://192.168.1.50:7373/`. That page lists the
-   exact, ready-to-paste URL for every scene you've created. It's also the quickest way to confirm
-   Companion's machine can reach the booth PC at all.
+2. Click the address shown in Settings — e.g. `http://192.168.1.50:7373/?key=…` — to open it in a
+   browser. That page lists the exact, ready-to-paste URL for every scene you've created. Opening it
+   from Companion's machine is also the quickest way to confirm it can reach the booth PC at all.
 3. In Companion, add a **Generic: HTTP Requests** connection.
 4. On a button, add the action **GET** and paste one of those URLs.
 
@@ -273,6 +274,9 @@ It's **off by default**. Turn it on in **Settings → Remote control (Stream Dec
 | `GET /status` | JSON: `{"output":true,"active":"Worship","scenes":["Worship","Preach"]}` |
 
 Every request needs `?key=yourkey` (or an `X-Api-Key` header) unless you clear the key.
+
+The pill follows along: a scene recalled from Companion appears in the **Scene** box, and
+`/output/…` moves the **Output** toggle, so the app never disagrees with the Stream Deck.
 
 Companion's generic HTTP module fires actions but doesn't easily read responses back, so buttons
 won't automatically light up to show the active scene. `/status` returns everything needed if you

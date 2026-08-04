@@ -66,9 +66,32 @@ public class LightingEngine : IDisposable
     private volatile bool _notifiedOnce;
     private bool _lastScreenNeeded;
 
-    public bool Enabled { get; set; }
+    private volatile bool _enabled;
+
+    /// <summary>
+    /// Master output on/off. Settable from the remote as well as the pill, so a change raises
+    /// <see cref="EnabledChanged"/> — the toggle in the window has no other way to learn about it.
+    /// </summary>
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value)
+                return;
+            _enabled = value;
+            EnabledChanged?.Invoke(value);
+        }
+    }
 
     private volatile string _activeGroupId = "";
+
+    /// <summary>
+    /// The scene most recently recalled, whether from the pill, settings or the remote. Only used to
+    /// break ties in <see cref="ActiveScene"/>; a stale id costs nothing because it is checked
+    /// against the live state before it is trusted.
+    /// </summary>
+    private volatile string _lastAppliedSceneId = "";
 
     /// <summary>The group the main window's controls act on; drives <see cref="OutputChanged"/>.</summary>
     public string ActiveGroupId
@@ -110,6 +133,8 @@ public class LightingEngine : IDisposable
     public event Action<string?>? OutputError;
     /// <summary>Fired when groups, their sources, or the active group change.</summary>
     public event Action? GroupsChanged;
+    /// <summary>Fired when master output is switched on or off, from wherever.</summary>
+    public event Action<bool>? EnabledChanged;
     /// <summary>Fired when screen capture becomes needed or unneeded.</summary>
     public event Action<bool>? ScreenNeededChanged;
 
@@ -255,6 +280,7 @@ public class LightingEngine : IDisposable
     /// </summary>
     public void ApplyScene(Scene scene)
     {
+        _lastAppliedSceneId = scene.Id;
         lock (_sync)
         {
             foreach (var state in _groups)
@@ -285,6 +311,22 @@ public class LightingEngine : IDisposable
                 ManualColour = g.Config.ManualColour,
             }).ToList();
         }
+    }
+
+    /// <summary>
+    /// The scene the stage is showing, or null once anything has been nudged by hand. Two scenes
+    /// can describe an identical look, so a scene that was actually recalled wins over an equally
+    /// good match earlier in the list — otherwise recalling "MC" would report its twin "Worship".
+    /// </summary>
+    public Scene? ActiveScene()
+    {
+        var scenes = _settings.Scenes.ToList();
+        string last = _lastAppliedSceneId;
+        var recalled = scenes.FirstOrDefault(s => s.Id == last);
+        if (recalled != null && MatchesScene(recalled))
+            return recalled;
+
+        return scenes.FirstOrDefault(MatchesScene);
     }
 
     /// <summary>

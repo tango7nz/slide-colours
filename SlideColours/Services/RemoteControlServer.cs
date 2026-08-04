@@ -260,7 +260,7 @@ public sealed class RemoteControlServer : IDisposable
         return new
         {
             output = _engine.Enabled,
-            active = scenes.FirstOrDefault(_engine.MatchesScene)?.Name,
+            active = _engine.ActiveScene()?.Name,
             scenes = scenes.Select(s => s.Name).ToArray(),
         };
     }

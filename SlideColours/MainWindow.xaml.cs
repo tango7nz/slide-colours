@@ -76,6 +76,14 @@ public partial class MainWindow : Window
             RefreshModeButtons();
         });
 
+        // Companion can switch the output too, and the toggle has to follow. Writing IsChecked
+        // re-enters EnableToggle_Changed, but that only writes back the value the engine already
+        // holds, which is a no-op rather than a loop.
+        _engine.EnabledChanged += on => Dispatcher.BeginInvoke(() =>
+        {
+            EnableToggle.IsChecked = on;
+        });
+
         _engine.OutputChanged += (colour, sending) => Dispatcher.BeginInvoke(() =>
         {
             ColourSwatch.Fill = new SolidColorBrush(colour);
@@ -180,7 +188,7 @@ public partial class MainWindow : Window
         foreach (var scene in _settings.Scenes)
             ScenePicker.Items.Add(new WpfComboBoxItem { Tag = scene.Id, Content = scene.DisplayName });
 
-        var live = _settings.Scenes.FirstOrDefault(_engine.MatchesScene);
+        var live = _engine.ActiveScene();
         int index = live == null ? 0 : _settings.Scenes.FindIndex(s => s.Id == live.Id) + 1;
         ScenePicker.SelectedIndex = index;
         _suspend = false;

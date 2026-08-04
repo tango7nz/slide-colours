@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Ports;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using Microsoft.Win32;
 using SlideColours.Models;
 using SlideColours.Services;
@@ -210,9 +211,11 @@ public partial class SettingsWindow : Window
         RemoteKeyLabel.IsEnabled = on;
         RemoteKeyPanel.IsEnabled = on;
 
+        RemoteHintText.Inlines.Clear();
+
         if (!on)
         {
-            RemoteHintText.Text = "Off — nothing on the network can control this app.";
+            RemoteHintText.Inlines.Add("Off — nothing on the network can control this app.");
             return;
         }
 
@@ -221,12 +224,26 @@ public partial class SettingsWindow : Window
         string port = RemotePortBox.Text.Trim() is { Length: > 0 } p ? p : "7373";
         string url = $"http://{RemoteControlServer.LocalAddress()}:{port}";
 
-        RemoteHintText.Text =
-            $"Open {url}/ in a browser for the list of URLs to paste into Companion.\n"
-            + $"Recall a scene with {url}/scene/YourSceneName{suffix}"
-            + (key.Length == 0
-                ? "\n\nNo access key: anyone on this network can control the lights."
-                : "");
+        // The key has to be on the index URL too, or the browser just gets a 401.
+        string indexUrl = $"{url}/{suffix}";
+
+        RemoteHintText.Inlines.Add("Open ");
+        // A half-typed port leaves the text unparseable, so fall back to plain text rather than throw.
+        if (Uri.TryCreate(indexUrl, UriKind.Absolute, out var uri))
+        {
+            var link = new Hyperlink(new Run(indexUrl)) { NavigateUri = uri };
+            link.RequestNavigate += Hyperlink_RequestNavigate;
+            RemoteHintText.Inlines.Add(link);
+        }
+        else
+        {
+            RemoteHintText.Inlines.Add(indexUrl);
+        }
+
+        RemoteHintText.Inlines.Add(" in a browser for the list of URLs to paste into Companion.\n");
+        RemoteHintText.Inlines.Add($"Recall a scene with {url}/scene/YourSceneName{suffix}");
+        if (key.Length == 0)
+            RemoteHintText.Inlines.Add("\n\nNo access key: anyone on this network can control the lights.");
     }
 
     private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
