@@ -172,7 +172,8 @@ public partial class RigWindow : Window
     {
         int count = group.FixtureIds.Count(id => _fixtures.Any(f => f.Id == id));
         string lights = count == 1 ? "1 light" : $"{count} lights";
-        return $"{group.DisplayName}  —  {ColourSources.Label(group.Source)}, {lights}";
+        string pulse = group.Pulse == PulseModes.Breathe ? ", breathing" : "";
+        return $"{group.DisplayName}  —  {ColourSources.Label(group.Source)}{pulse}, {lights}";
     }
 
     private void LoadGroupDetail()
@@ -184,11 +185,14 @@ public partial class RigWindow : Window
         RemoveGroupButton.IsEnabled = group != null;
         GroupNameBox.Text = group?.Name ?? "";
         SelectByTag(GroupSourceBox, group?.Source ?? ColourSources.Slide);
+        SelectByTag(GroupPulseBox, group?.Pulse ?? PulseModes.Off);
+        GroupDepthSlider.Value = group?.PulseDepthPercent ?? 40;
 
         _suspend = false;
 
         RebuildMembership();
         UpdateGroupHint();
+        UpdatePulseFields();
     }
 
     private void GroupList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -204,15 +208,46 @@ public partial class RigWindow : Window
 
         group.Name = GroupNameBox.Text;
         group.Source = SelectedTag(GroupSourceBox);
+        group.Pulse = PulseModes.Normalise(SelectedTag(GroupPulseBox));
 
         if (GroupList.SelectedItem is ListBoxItem item)
             item.Content = DescribeGroup(group);
         UpdateGroupHint();
+        UpdatePulseFields();
         RefreshWarnings();
+    }
+
+    /// <summary>
+    /// Depth is meaningless on a steady group, so it follows the mode rather than sitting there
+    /// inviting a change that would do nothing.
+    /// </summary>
+    private void UpdatePulseFields()
+    {
+        bool breathing = SelectedGroup?.Pulse == PulseModes.Breathe;
+        GroupDepthLabel.IsEnabled = breathing;
+        GroupDepthSlider.IsEnabled = breathing;
+        GroupDepthValue.Text = breathing ? $"{(int)GroupDepthSlider.Value}%" : "";
+    }
+
+    private void GroupDepth_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suspend || SelectedGroup is not { } group)
+            return;
+
+        group.PulseDepthPercent = (int)GroupDepthSlider.Value;
+        GroupDepthValue.Text = $"{group.PulseDepthPercent}%";
     }
 
     private void UpdateGroupHint()
     {
+        if (SelectedGroup?.Pulse == PulseModes.Breathe)
+        {
+            GroupHintText.Text =
+                "Rides this group's brightness on the bass in the audio feed chosen in Settings. "
+                + "The colour still comes from the source above — only the intensity moves.";
+            return;
+        }
+
         GroupHintText.Text = SelectedGroup?.Source switch
         {
             ColourSources.Screen => "Samples the display chosen in Settings, continuously.",

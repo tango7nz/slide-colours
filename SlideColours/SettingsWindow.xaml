@@ -3,14 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:w="clr-namespace:System.Windows;assembly=PresentationFramework"
         Title="Slide Colours — Settings"
-        Width="840" SizeToContent="Height" ResizeMode="NoResize"
+        Width="1240" SizeToContent="Height" ResizeMode="NoResize"
         MaxHeight="{x:Static w:SystemParameters.MaximizedPrimaryScreenHeight}"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontFamily="Segoe UI" FontSize="12">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <!-- Three columns, grouped by what you'd come here to change: what the lights are listening
+         to, the rig they drive, then the app around it. Two columns had grown tall enough to
+         scroll on a laptop, which buries the Save button. -->
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="16"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="16"/>
             <ColumnDefinition Width="*"/>
@@ -20,7 +25,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Left column: where the colour comes from and where it goes -->
+        <!-- Column 1: the inputs — where colour and music are picked up from -->
         <StackPanel Grid.Row="0" Grid.Column="0">
 
             <GroupBox Header="ProPresenter" Padding="8">
@@ -46,7 +51,94 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Header="DMX output" Padding="8" Margin="0,10,0,0">
+            <GroupBox Header="Screen capture (Follow screen)" Padding="8" Margin="0,10,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Display:"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CaptureDisplayBox" Margin="0,2"
+                              ToolTip="The screen to sample. Pick the one showing the audience/main output."/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Smoothing (ms):"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="SmoothingBox" Margin="0,2" VerticalContentAlignment="Center"
+                             ToolTip="How quickly the lights chase the picture. Higher is calmer, lower is snappier."/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Sample rate:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="CaptureFpsBox" Margin="0,2"
+                              ToolTip="Frames per second sampled from the display">
+                        <ComboBoxItem Tag="15" Content="15 per second (lightest)"/>
+                        <ComboBoxItem Tag="30" Content="30 per second (recommended)"/>
+                        <ComboBoxItem Tag="60" Content="60 per second (smoothest)"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="Samples the screen itself, so animated and video backgrounds drive the lights. The display must be connected and awake — it won't capture a projector that's switched off."/>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="Music reaction (Breathe)" Padding="8" Margin="0,10,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="46"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Listen to:"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioDeviceBox" Margin="0,2"
+                              SelectionChanged="AudioDevice_Changed"
+                              ToolTip="A line feed from the sound desk is much the best input — you choose what's in it."/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Silence below:"/>
+                    <Slider Grid.Row="1" Grid.Column="1" x:Name="AudioGateSlider" Minimum="-80" Maximum="-20"
+                            VerticalAlignment="Center" ValueChanged="AudioGate_Changed"
+                            ToolTip="Anything quieter than this counts as silence. Raise it until talking no longer moves the meter."/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" x:Name="AudioGateValue" VerticalAlignment="Center"
+                               TextAlignment="Right"/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Settle time:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioResponseBox" Margin="0,2"
+                              ToolTip="How long the lights take to fall back after a beat. They always rise quickly.">
+                        <ComboBoxItem Tag="250" Content="Snappy (250 ms)"/>
+                        <ComboBoxItem Tag="400" Content="Musical (400 ms) — recommended"/>
+                        <ComboBoxItem Tag="700" Content="Gentle (700 ms)"/>
+                    </ComboBox>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Bass level:"/>
+                    <ProgressBar Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioMeter"
+                                 Height="14" Minimum="0" Maximum="100" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="4" Grid.ColumnSpan="3" x:Name="AudioStatusText" Margin="4,6,0,0"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Grid.Row="5" Grid.ColumnSpan="3" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="Only the bass is measured, so speech barely registers — but a feed from the desk carrying just the band beats any microphone. Turn breathing on per group in Lights &amp; groups, and save it into a scene so the songs move and the message doesn't."/>
+                </Grid>
+            </GroupBox>
+
+        </StackPanel>
+
+        <!-- Column 2: the rig — where the colour goes, and how it behaves on the way out -->
+        <StackPanel Grid.Row="0" Grid.Column="2">
+
+            <GroupBox Header="DMX output" Padding="8">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="130"/>
@@ -106,83 +198,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="Screen capture (Follow screen)" Padding="8" Margin="0,10,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <Label Grid.Row="0" Grid.Column="0" Content="Display:"/>
-                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CaptureDisplayBox" Margin="0,2"
-                              ToolTip="The screen to sample. Pick the one showing the audience/main output."/>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="Smoothing (ms):"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="SmoothingBox" Margin="0,2" VerticalContentAlignment="Center"
-                             ToolTip="How quickly the lights chase the picture. Higher is calmer, lower is snappier."/>
-
-                    <Label Grid.Row="2" Grid.Column="0" Content="Sample rate:"/>
-                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="CaptureFpsBox" Margin="0,2"
-                              ToolTip="Frames per second sampled from the display">
-                        <ComboBoxItem Tag="15" Content="15 per second (lightest)"/>
-                        <ComboBoxItem Tag="30" Content="30 per second (recommended)"/>
-                        <ComboBoxItem Tag="60" Content="60 per second (smoothest)"/>
-                    </ComboBox>
-
-                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
-                               Text="Samples the screen itself, so animated and video backgrounds drive the lights. The display must be connected and awake — it won't capture a projector that's switched off."/>
-                </Grid>
-            </GroupBox>
-
-            <GroupBox Header="Remote control (Stream Deck)" Padding="8" Margin="0,10,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2" x:Name="RemoteEnabledCheck" Margin="4,2,0,4"
-                              Checked="RemoteEnabled_Changed" Unchecked="RemoteEnabled_Changed">
-                        <TextBlock Text="Let Bitfocus Companion / Stream Deck recall scenes" TextWrapping="Wrap"/>
-                    </CheckBox>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="Port:" x:Name="RemotePortLabel"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="RemotePortBox" Margin="0,2"
-                             VerticalContentAlignment="Center"
-                             ToolTip="The port Companion connects to. 7373 unless something else is using it."/>
-
-                    <Label Grid.Row="2" Grid.Column="0" Content="Access key:" x:Name="RemoteKeyLabel"/>
-                    <DockPanel Grid.Row="2" Grid.Column="1" x:Name="RemoteKeyPanel" Margin="0,2">
-                        <Button DockPanel.Dock="Right" x:Name="RemoteKeyButton" Content="New" Width="52"
-                                Margin="6,0,0,0" Click="RemoteKey_Click"
-                                ToolTip="Generate a new key. Companion will need the new URL."/>
-                        <TextBox x:Name="RemoteKeyBox" VerticalContentAlignment="Center"
-                                 ToolTip="Required as ?key=… on every request. Clear it to allow anyone on the network to control the lights."/>
-                    </DockPanel>
-
-                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" x:Name="RemoteHintText" Margin="4,6,0,0"
-                               Foreground="Gray" TextWrapping="Wrap"/>
-                </Grid>
-            </GroupBox>
-
-        </StackPanel>
-
-        <!-- Right column: how the colour behaves, plus app-level settings -->
-        <StackPanel Grid.Row="0" Grid.Column="2">
-
-            <GroupBox Header="Colour behaviour" Padding="8">
+            <GroupBox Header="Colour behaviour" Padding="8" Margin="0,10,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="130"/>
@@ -227,27 +243,6 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Header="Updates" Padding="8" Margin="0,10,0,0">
-                <StackPanel>
-                    <TextBlock x:Name="VersionText" Foreground="Gray" Margin="4,0,0,0"/>
-                    <CheckBox x:Name="AutoCheckUpdatesCheck" Margin="4,8,0,0"
-                              Content="Automatically check for updates on startup"/>
-                    <TextBlock x:Name="UpdateStatusText" Margin="4,6,0,0" TextWrapping="Wrap"
-                               Visibility="Collapsed"/>
-                    <TextBlock x:Name="ReleaseNotesText" Margin="4,4,0,0" Visibility="Collapsed">
-                        <Hyperlink x:Name="ReleaseNotesLink" RequestNavigate="Hyperlink_RequestNavigate">
-                            View release notes
-                        </Hyperlink>
-                    </TextBlock>
-                    <DockPanel Margin="0,8,0,0">
-                        <Button DockPanel.Dock="Left" x:Name="CheckUpdateButton" Content="Check for updates"
-                                Padding="10,5" Click="CheckUpdate_Click"/>
-                        <Button HorizontalAlignment="Right" x:Name="InstallUpdateButton" Content="Install update"
-                                Padding="10,5" Visibility="Collapsed" Click="InstallUpdate_Click"/>
-                    </DockPanel>
-                </StackPanel>
-            </GroupBox>
-
             <GroupBox Header="Startup" Padding="8" Margin="0,10,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -273,6 +268,69 @@
                 </Grid>
             </GroupBox>
 
+        </StackPanel>
+
+        <!-- Column 3: the app itself — nothing here changes what the lights do -->
+        <StackPanel Grid.Row="0" Grid.Column="4">
+
+            <GroupBox Header="Remote control (Stream Deck)" Padding="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2" x:Name="RemoteEnabledCheck" Margin="4,2,0,4"
+                              Checked="RemoteEnabled_Changed" Unchecked="RemoteEnabled_Changed">
+                        <TextBlock Text="Let Bitfocus Companion / Stream Deck recall scenes" TextWrapping="Wrap"/>
+                    </CheckBox>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Port:" x:Name="RemotePortLabel"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="RemotePortBox" Margin="0,2"
+                             VerticalContentAlignment="Center"
+                             ToolTip="The port Companion connects to. 7373 unless something else is using it."/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Access key:" x:Name="RemoteKeyLabel"/>
+                    <DockPanel Grid.Row="2" Grid.Column="1" x:Name="RemoteKeyPanel" Margin="0,2">
+                        <Button DockPanel.Dock="Right" x:Name="RemoteKeyButton" Content="New" Width="52"
+                                Margin="6,0,0,0" Click="RemoteKey_Click"
+                                ToolTip="Generate a new key. Companion will need the new URL."/>
+                        <TextBox x:Name="RemoteKeyBox" VerticalContentAlignment="Center"
+                                 ToolTip="Required as ?key=… on every request. Clear it to allow anyone on the network to control the lights."/>
+                    </DockPanel>
+
+                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" x:Name="RemoteHintText" Margin="4,6,0,0"
+                               Foreground="Gray" TextWrapping="Wrap"/>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="Updates" Padding="8" Margin="0,10,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="VersionText" Foreground="Gray" Margin="4,0,0,0"/>
+                    <CheckBox x:Name="AutoCheckUpdatesCheck" Margin="4,8,0,0"
+                              Content="Automatically check for updates on startup"/>
+                    <TextBlock x:Name="UpdateStatusText" Margin="4,6,0,0" TextWrapping="Wrap"
+                               Visibility="Collapsed"/>
+                    <TextBlock x:Name="ReleaseNotesText" Margin="4,4,0,0" Visibility="Collapsed">
+                        <Hyperlink x:Name="ReleaseNotesLink" RequestNavigate="Hyperlink_RequestNavigate">
+                            View release notes
+                        </Hyperlink>
+                    </TextBlock>
+                    <DockPanel Margin="0,8,0,0">
+                        <Button DockPanel.Dock="Left" x:Name="CheckUpdateButton" Content="Check for updates"
+                                Padding="10,5" Click="CheckUpdate_Click"/>
+                        <Button HorizontalAlignment="Right" x:Name="InstallUpdateButton" Content="Install update"
+                                Padding="10,5" Visibility="Collapsed" Click="InstallUpdate_Click"/>
+                    </DockPanel>
+                </StackPanel>
+            </GroupBox>
+
             <GroupBox Header="Settings file" Padding="8" Margin="0,10,0,0">
                 <StackPanel>
                     <DockPanel>
@@ -296,7 +354,7 @@
 
         </StackPanel>
 
-        <DockPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0">
+        <DockPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,16,0,0">
             <Button DockPanel.Dock="Left" x:Name="TestButton" Content="Test lights" Width="100" Padding="0,5"
                     Click="Test_Click"
                     ToolTip="Saves these settings, then lights each fixture in turn — red, green, blue, white — so you can check which light is which and that its channels are in order"/>

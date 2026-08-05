@@ -48,6 +48,29 @@ public class AppSettings
     public int CaptureFps { get; set; } = 30;            // how often the display is sampled
     public int CaptureSmoothingMs { get; set; } = 400;   // temporal smoothing of the captured colour
 
+    // Music reaction — a group set to "breathe" has its intensity ridden by the bass in the audio
+    // feed. Only the intensity: the colour still comes from that group's own source.
+
+    /// <summary>
+    /// Which audio input to listen to. Blank means the default playback device, captured as
+    /// loopback. Otherwise "render:{id}" for another playback device (loopback again) or
+    /// "capture:{id}" for a real input — a line feed from the sound desk, which is what you want.
+    /// </summary>
+    public string AudioDeviceId { get; set; } = "";
+
+    /// <summary>
+    /// Level in dBFS below which the feed counts as silence and the lights settle. This is the
+    /// control that keeps talking near an open mic from moving the lights, so it's worth setting
+    /// by eye against the meter in Settings.
+    /// </summary>
+    public int AudioGateDb { get; set; } = -48;
+
+    /// <summary>
+    /// How long the level takes to fall back after the music drops, in ms. Higher is calmer. The
+    /// rise is deliberately much faster — see <see cref="Services.AudioLevelSource"/>.
+    /// </summary>
+    public int AudioResponseMs { get; set; } = 400;
+
     // Colour behaviour
     public int FadeMs { get; set; } = 800;
     public int BrightnessPercent { get; set; } = 100;
@@ -147,6 +170,8 @@ public class AppSettings
         {
             group.FixtureIds ??= new List<string>();
             group.Source = ColourSources.Normalise(group.Source);
+            group.Pulse = PulseModes.Normalise(group.Pulse);
+            group.PulseDepthPercent = Math.Clamp(group.PulseDepthPercent, 0, 100);
         }
 
         if (!Groups.Any(g => g.Id == ActiveGroupId))
@@ -163,7 +188,11 @@ public class AppSettings
             scene.Groups ??= new List<SceneGroupState>();
             scene.Groups.RemoveAll(entry => !Groups.Any(g => g.Id == entry.GroupId));
             foreach (var entry in scene.Groups)
+            {
                 entry.Source = ColourSources.Normalise(entry.Source);
+                entry.Pulse = PulseModes.Normalise(entry.Pulse);
+                entry.PulseDepthPercent = Math.Clamp(entry.PulseDepthPercent, 0, 100);
+            }
         }
 
         if (StartupSceneId.Length > 0 && !Scenes.Any(s => s.Id == StartupSceneId))

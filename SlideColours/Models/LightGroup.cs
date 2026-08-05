@@ -20,6 +20,15 @@ public class LightGroup
     /// <summary>The colour held while <see cref="Source"/> is "manual".</summary>
     public string ManualColour { get; set; } = "#FFFFFF";
 
+    /// <summary>off | breathe — see <see cref="PulseModes"/>. Independent of <see cref="Source"/>.</summary>
+    public string Pulse { get; set; } = PulseModes.Off;
+
+    /// <summary>
+    /// How far the music pulls the intensity down at silence, as a percentage. 40 means the group
+    /// breathes between 60% and 100% of its normal level. The colour itself never changes.
+    /// </summary>
+    public int PulseDepthPercent { get; set; } = 40;
+
     [JsonIgnore]
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? "(unnamed group)" : Name;
 
@@ -30,7 +39,27 @@ public class LightGroup
         FixtureIds = new List<string>(FixtureIds),
         Source = Source,
         ManualColour = ManualColour,
+        Pulse = Pulse,
+        PulseDepthPercent = PulseDepthPercent,
     };
+}
+
+/// <summary>
+/// The values <see cref="LightGroup.Pulse"/> can take. Deliberately separate from
+/// <see cref="ColourSources"/>: pulsing shapes a group's intensity and leaves its colour alone, so
+/// any source can pulse — a group following the screen keeps taking its hue from the picture while
+/// the music moves the brightness.
+/// </summary>
+public static class PulseModes
+{
+    public const string Off = "off";
+
+    /// <summary>Intensity follows the smoothed bass level continuously — musical, not strobey.</summary>
+    public const string Breathe = "breathe";
+
+    public static string Label(string mode) => mode == Breathe ? "breathe" : "steady";
+
+    public static string Normalise(string? mode) => mode == Breathe ? Breathe : Off;
 }
 
 /// <summary>The values <see cref="LightGroup.Source"/> can take, and their labels.</summary>

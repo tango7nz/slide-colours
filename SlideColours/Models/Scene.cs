@@ -42,16 +42,30 @@ public class SceneGroupState
     /// <summary>The colour to hold when <see cref="Source"/> is "manual".</summary>
     public string ManualColour { get; set; } = "#FFFFFF";
 
+    /// <summary>
+    /// off | breathe — whether this group reacts to the music in this look. Scenes are how you get
+    /// the band's songs breathing and the sermon rock steady, in one click each.
+    /// </summary>
+    public string Pulse { get; set; } = PulseModes.Off;
+
+    /// <summary>See <see cref="LightGroup.PulseDepthPercent"/>.</summary>
+    public int PulseDepthPercent { get; set; } = 40;
+
     public SceneGroupState Clone() => new()
     {
         GroupId = GroupId,
         Source = Source,
         ManualColour = ManualColour,
+        Pulse = Pulse,
+        PulseDepthPercent = PulseDepthPercent,
     };
 
     /// <summary>True when a group is currently doing exactly what this entry describes.</summary>
     public bool Matches(LightGroup group) =>
         group.Source == Source &&
         (Source != ColourSources.Manual ||
-         string.Equals(group.ManualColour, ManualColour, StringComparison.OrdinalIgnoreCase));
+         string.Equals(group.ManualColour, ManualColour, StringComparison.OrdinalIgnoreCase)) &&
+        group.Pulse == Pulse &&
+        // Depth only distinguishes two looks that are both breathing.
+        (Pulse == PulseModes.Off || group.PulseDepthPercent == PulseDepthPercent);
 }

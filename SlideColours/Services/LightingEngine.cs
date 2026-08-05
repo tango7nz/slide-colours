@@ -37,6 +37,15 @@ public class LightingEngine : IDisposable
     private List<GroupState> _groups = new();
 
     /// <summary>
+    /// The bass level driving groups set to breathe, 0 to 1. Starts at full so nothing is dimmed
+    /// before the first buffer arrives. Guarded by <see cref="_sync"/>.
+    /// </summary>
+    private double _audioLevel = 1.0;
+
+    /// <summary>False while the audio input is broken — see <see cref="SetAudioHealthy"/>.</summary>
+    private bool _audioHealthy = true;
+
+    /// <summary>
     /// Fixtures the patch test is walking, one at a time. Empty when no test is running. These are
     /// the caller's own <see cref="Fixture"/> objects, so the rig editor can test an edited channel
     /// before it's been saved.
@@ -65,6 +74,7 @@ public class LightingEngine : IDisposable
     private bool _lastSending;
     private volatile bool _notifiedOnce;
     private bool _lastScreenNeeded;
+    private bool _lastAudioNeeded;
 
     private volatile bool _enabled;
 
@@ -127,6 +137,16 @@ public class LightingEngine : IDisposable
         }
     }
 
+    /// <summary>True while any group is breathing, so the audio device is only opened when it's used.</summary>
+    public bool AudioNeeded
+    {
+        get
+        {
+            lock (_sync)
+                return _groups.Any(g => g.Config.Pulse == PulseModes.Breathe);
+        }
+    }
+
     /// <summary>Fired (from a background thread) when the active group's colour or sending state changes.</summary>
     public event Action<WpfColor, bool>? OutputChanged;
     /// <summary>Fired when the DMX output fails or recovers; null = healthy.</summary>
@@ -137,6 +157,8 @@ public class LightingEngine : IDisposable
     public event Action<bool>? EnabledChanged;
     /// <summary>Fired when screen capture becomes needed or unneeded.</summary>
     public event Action<bool>? ScreenNeededChanged;
+    /// <summary>Fired when audio capture becomes needed or unneeded.</summary>
+    public event Action<bool>? AudioNeededChanged;
 
     public LightingEngine(AppSettings settings)
     {
@@ -197,7 +219,7 @@ public class LightingEngine : IDisposable
             _activeGroupId = _settings.Groups[0].Id;
 
         GroupsChanged?.Invoke();
-        RaiseScreenNeeded();
+        RaiseSourceNeeds();
     }
 
     /// <summary>
@@ -253,7 +275,7 @@ public class LightingEngine : IDisposable
         }
         _settings.Save();
         GroupsChanged?.Invoke();
-        RaiseScreenNeeded();
+        RaiseSourceNeeds();
     }
 
     /// <summary>Holds a chosen colour on a group, switching it to the manual source.</summary>
@@ -270,7 +292,7 @@ public class LightingEngine : IDisposable
         }
         _settings.Save();
         GroupsChanged?.Invoke();
-        RaiseScreenNeeded();
+        RaiseSourceNeeds();
     }
 
     /// <summary>
@@ -291,12 +313,14 @@ public class LightingEngine : IDisposable
                 state.Config.Source = ColourSources.Normalise(entry.Source);
                 if (state.Config.Source == ColourSources.Manual)
                     state.Config.ManualColour = entry.ManualColour;
+                state.Config.Pulse = PulseModes.Normalise(entry.Pulse);
+                state.Config.PulseDepthPercent = Math.Clamp(entry.PulseDepthPercent, 0, 100);
                 SeedStaticTarget(state);
             }
         }
         _settings.Save();
         GroupsChanged?.Invoke();
-        RaiseScreenNeeded();
+        RaiseSourceNeeds();
     }
 
     /// <summary>Snapshots what every group is doing right now, for saving into a scene.</summary>
@@ -309,6 +333,8 @@ public class LightingEngine : IDisposable
                 GroupId = g.Config.Id,
                 Source = g.Config.Source,
                 ManualColour = g.Config.ManualColour,
+                Pulse = g.Config.Pulse,
+                PulseDepthPercent = g.Config.PulseDepthPercent,
             }).ToList();
         }
     }
@@ -354,6 +380,33 @@ public class LightingEngine : IDisposable
     {
         lock (_sync)
             return _groups.FirstOrDefault(g => g.Config.Id == groupId)?.Config.Source ?? ColourSources.Off;
+    }
+
+    /// <summary>
+    /// Turns breathing on or off for a group and persists the change. Deliberately does not touch
+    /// the group's colour source — the two are independent, so a group can be switched between
+    /// breathing and steady mid-song without disturbing where its colour comes from.
+    /// </summary>
+    public void SetGroupPulse(string groupId, string pulse)
+    {
+        pulse = PulseModes.Normalise(pulse);
+        lock (_sync)
+        {
+            var state = _groups.FirstOrDefault(g => g.Config.Id == groupId);
+            if (state == null || state.Config.Pulse == pulse)
+                return;
+            state.Config.Pulse = pulse;
+        }
+        _settings.Save();
+        GroupsChanged?.Invoke();
+        RaiseSourceNeeds();
+    }
+
+    /// <summary>The pulse mode a group is currently using, or "off" for an unknown group.</summary>
+    public string PulseOf(string groupId)
+    {
+        lock (_sync)
+            return _groups.FirstOrDefault(g => g.Config.Id == groupId)?.Config.Pulse ?? PulseModes.Off;
     }
 
     public void OnSlideImage(byte[] imageBytes)
@@ -455,13 +508,44 @@ public class LightingEngine : IDisposable
         return System.Windows.Media.Colors.White;
     }
 
-    private void RaiseScreenNeeded()
+    /// <summary>
+    /// Announces which capture sources the current rig actually needs, so neither the display nor
+    /// the audio device is opened unless some group is using it. Called after anything that can
+    /// change a group's source or pulse mode.
+    /// </summary>
+    private void RaiseSourceNeeds()
     {
-        bool needed = ScreenNeeded;
-        if (needed == _lastScreenNeeded)
-            return;
-        _lastScreenNeeded = needed;
-        ScreenNeededChanged?.Invoke(needed);
+        bool screen = ScreenNeeded;
+        if (screen != _lastScreenNeeded)
+        {
+            _lastScreenNeeded = screen;
+            ScreenNeededChanged?.Invoke(screen);
+        }
+
+        bool audio = AudioNeeded;
+        if (audio != _lastAudioNeeded)
+        {
+            _lastAudioNeeded = audio;
+            AudioNeededChanged?.Invoke(audio);
+        }
+    }
+
+    /// <summary>The latest bass level from <see cref="AudioLevelSource"/>, 0 to 1.</summary>
+    public void OnAudioLevel(double level)
+    {
+        lock (_sync)
+            _audioLevel = Math.Clamp(level, 0, 1);
+    }
+
+    /// <summary>
+    /// Tells the engine whether the audio input is working. A broken input holds breathing groups
+    /// at full brightness rather than at the bottom of their swing — lights that have quietly gone
+    /// dim read as a fault on stage, and the reason for it isn't visible from there.
+    /// </summary>
+    public void SetAudioHealthy(bool healthy)
+    {
+        lock (_sync)
+            _audioHealthy = healthy;
     }
 
     private async Task LoopAsync()
@@ -611,17 +695,38 @@ public class LightingEngine : IDisposable
     private void BuildFrame(Fixture? testFixture)
     {
         Array.Clear(_frame);
-        double brightness = Math.Clamp(_settings.BrightnessPercent, 0, 100) / 100.0;
+        double master = Math.Clamp(_settings.BrightnessPercent, 0, 100) / 100.0;
 
         if (testFixture != null)
         {
-            WriteFixture(testFixture, _testR, _testG, _testB, brightness);
+            WriteFixture(testFixture, _testR, _testG, _testB, master);
             return;
         }
 
+        // The intensity each group ends up at is the master brightness times whatever its own
+        // effects are doing. Working it out per group rather than once for the frame is what lets
+        // one group breathe with the music while the rest hold steady.
         foreach (var state in _groups)
+        {
+            double level = master * PulseFactorLocked(state);
             foreach (var fixture in state.Fixtures)
-                WriteFixture(fixture, state.CurR, state.CurG, state.CurB, brightness);
+                WriteFixture(fixture, state.CurR, state.CurG, state.CurB, level);
+        }
+    }
+
+    /// <summary>
+    /// How far the music is holding this group's intensity down right now, from 1 (untouched) to
+    /// 1 − depth at silence. Applied here at frame-build time rather than as a fade target on
+    /// purpose: routed through <see cref="MoveToward"/> the fade time would smear every beat flat.
+    /// Caller holds the lock.
+    /// </summary>
+    private double PulseFactorLocked(GroupState state)
+    {
+        if (state.Config.Pulse != PulseModes.Breathe || !_audioHealthy)
+            return 1.0;
+
+        double depth = Math.Clamp(state.Config.PulseDepthPercent, 0, 100) / 100.0;
+        return 1.0 - depth * (1.0 - _audioLevel);
     }
 
     private void WriteFixture(Fixture fixture, double r, double g, double b, double brightness)

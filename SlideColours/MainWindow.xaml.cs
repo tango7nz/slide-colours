@@ -18,11 +18,13 @@ public partial class MainWindow : Window
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
     private readonly ScreenColourSource _screen;
+    private readonly AudioLevelSource _audio;
     private readonly UpdateService _update;
     private readonly RemoteControlServer _remote;
 
     private bool _connected;
     private string? _captureStatus;
+    private string? _audioStatus;
 
     /// <summary>Set while the group picker is being repopulated, so its handler doesn't fire back.</summary>
     private bool _suspend;
@@ -32,12 +34,13 @@ public partial class MainWindow : Window
     private static readonly WpfBrush ModeFaintBorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
 
     public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
-        ScreenColourSource screen, UpdateService update, RemoteControlServer remote)
+        ScreenColourSource screen, AudioLevelSource audio, UpdateService update, RemoteControlServer remote)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
         _screen = screen;
+        _audio = audio;
         _update = update;
         _remote = remote;
 
@@ -55,6 +58,7 @@ public partial class MainWindow : Window
         EnableToggle.IsChecked = _engine.Enabled;
         _connected = _client.Connected;
         _captureStatus = _screen.Status;
+        _audioStatus = _audio.Status;
         RebuildGroupPicker();
         RefreshScenePicker();
 
@@ -73,6 +77,12 @@ public partial class MainWindow : Window
         _screen.StatusChanged += status => Dispatcher.BeginInvoke(() =>
         {
             _captureStatus = status;
+            RefreshModeButtons();
+        });
+
+        _audio.StatusChanged += status => Dispatcher.BeginInvoke(() =>
+        {
+            _audioStatus = status;
             RefreshModeButtons();
         });
 
@@ -265,6 +275,19 @@ public partial class MainWindow : Window
 
     private void GroupOff_Click(object sender, RoutedEventArgs e) => SetActiveGroupSource(ColourSources.Off);
 
+    /// <summary>
+    /// Flips the selected group between breathing and steady. A toggle rather than a mode button
+    /// because breathing isn't a colour source — it sits on top of whichever one is selected.
+    /// </summary>
+    private void Breathe_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActiveGroupId is not { } id)
+            return;
+
+        bool breathing = _engine.PulseOf(id) == PulseModes.Breathe;
+        _engine.SetGroupPulse(id, breathing ? PulseModes.Off : PulseModes.Breathe);
+    }
+
     private void RefreshModeButtons()
     {
         string? groupId = ActiveGroupId;
@@ -302,6 +325,18 @@ public partial class MainWindow : Window
             : source == ColourSources.Off
                 ? $"{group} is held dark"
                 : $"Click to hold {group} dark — other groups keep running";
+
+        // Breathing layers on top of the source, so this stays available whatever the three
+        // buttons above are showing. The audio status is only worth surfacing while a group is
+        // actually breathing — that's the only time the input is open and a failure matters.
+        bool breathing = hasGroup && _engine.PulseOf(groupId!) == PulseModes.Breathe;
+        BreatheButton.IsEnabled = hasGroup;
+        Highlight(BreatheButton, breathing);
+        BreatheButton.ToolTip = !hasGroup
+            ? "Add a group in Settings → Lights & groups"
+            : breathing
+                ? _audioStatus ?? $"{group} is breathing with the music — click to hold it steady"
+                : $"Click to ride {group}'s brightness on the music — its colour still comes from the source on the left";
 
         // The swatches set a manual colour, which is a source in its own right.
         foreach (var button in FavouritePanel.Children.OfType<WpfButton>())
@@ -426,7 +461,7 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings, _engine, _client, _screen, _update, _remote) { Owner = this };
+        var dialog = new SettingsWindow(_settings, _engine, _client, _screen, _audio, _update, _remote) { Owner = this };
         dialog.ShowDialog();
         RebuildGroupPicker();
         RefreshScenePicker();

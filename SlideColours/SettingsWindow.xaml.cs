@@ -19,21 +19,24 @@ public partial class SettingsWindow : Window
     private readonly LightingEngine _engine;
     private readonly ProPresenterClient _client;
     private readonly ScreenColourSource _screen;
+    private readonly AudioLevelSource _audio;
     private readonly UpdateService _update;
     private readonly RemoteControlServer _remote;
     private bool _loaded;
 
     public SettingsWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
-        ScreenColourSource screen, UpdateService update, RemoteControlServer remote)
+        ScreenColourSource screen, AudioLevelSource audio, UpdateService update, RemoteControlServer remote)
     {
         _settings = settings;
         _engine = engine;
         _client = client;
         _screen = screen;
+        _audio = audio;
         _update = update;
         _remote = remote;
 
         InitializeComponent();
+        StartAudioMeter();
 
         VersionText.Text = $"Current version: {UpdateService.CurrentVersion.ToString(3)}";
         ShowUpdateState(_update.Available);
@@ -67,6 +70,10 @@ public partial class SettingsWindow : Window
         PopulateDisplays();
         SmoothingBox.Text = _settings.CaptureSmoothingMs.ToString();
         SelectByTag(CaptureFpsBox, _settings.CaptureFps.ToString(), "30");
+
+        PopulateAudioDevices();
+        AudioGateSlider.Value = Math.Clamp(_settings.AudioGateDb, -80, -20);
+        SelectByTag(AudioResponseBox, _settings.AudioResponseMs.ToString(), "400");
 
         FadeBox.Text = _settings.FadeMs.ToString();
         BrightnessSlider.Value = _settings.BrightnessPercent;
@@ -256,6 +263,106 @@ public partial class SettingsWindow : Window
     {
         BrightnessValue.Text = $"{(int)BrightnessSlider.Value}%";
         SaturationValue.Text = $"{(int)SaturationSlider.Value}%";
+        AudioGateValue.Text = $"{(int)AudioGateSlider.Value} dB";
+    }
+
+    /// <summary>
+    /// Lists the audio inputs, with the default playback device first as the one entry guaranteed
+    /// to exist. A device saved earlier may be unplugged right now — a USB interface that isn't
+    /// switched on yet — so it stays selectable rather than silently reverting.
+    /// </summary>
+    private void PopulateAudioDevices()
+    {
+        AudioDeviceBox.Items.Clear();
+        AudioDeviceBox.Items.Add(new WpfComboBoxItem { Tag = "", Content = "Default playback device (what this PC plays)" });
+
+        foreach (var device in AudioLevelSource.List())
+            AudioDeviceBox.Items.Add(new WpfComboBoxItem { Tag = device.Id, Content = device.Label });
+
+        string saved = _settings.AudioDeviceId;
+        if (!string.IsNullOrWhiteSpace(saved)
+            && !AudioDeviceBox.Items.Cast<WpfComboBoxItem>().Any(i => (string)i.Tag == saved))
+        {
+            AudioDeviceBox.Items.Add(new WpfComboBoxItem { Tag = saved, Content = "Saved device (not connected)" });
+        }
+
+        SelectByTag(AudioDeviceBox, saved);
+    }
+
+    /// <summary>
+    /// Switching device takes effect straight away rather than on Save, because the whole point of
+    /// the meter below is to try one and watch what it does.
+    /// </summary>
+    private void AudioDevice_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded)
+            return;
+        _settings.AudioDeviceId = SelectedTag(AudioDeviceBox);
+        _audio.Restart();
+    }
+
+    /// <summary>
+    /// The gate is live for the same reason: you set it by talking near the mic and pushing it up
+    /// until the meter stops moving, which needs the change applied as the slider moves.
+    /// </summary>
+    private void AudioGate_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_loaded)
+            return;
+        _settings.AudioGateDb = (int)AudioGateSlider.Value;
+        UpdateSliderLabels();
+    }
+
+    /// <summary>
+    /// Runs the meter while this window is open, and forces audio capture on for the duration —
+    /// otherwise the gate could only be set after a group was already breathing, which is exactly
+    /// the wrong way round.
+    /// </summary>
+    private void StartAudioMeter()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(33),
+        };
+        timer.Tick += (_, _) =>
+        {
+            AudioMeter.Value = _audio.Level * 100;
+            ShowAudioStatus(_audio.Status);
+        };
+
+        // The device and gate are applied as they're changed, which means they've already taken
+        // effect if the dialog is then cancelled. Remember them so Cancel still means cancel.
+        string device = _settings.AudioDeviceId;
+        int gate = _settings.AudioGateDb;
+
+        _audio.SetActive(true);
+        timer.Start();
+
+        Closed += (_, _) =>
+        {
+            timer.Stop();
+            if (DialogResult != true)
+            {
+                _settings.AudioDeviceId = device;
+                _settings.AudioGateDb = gate;
+                _audio.Restart();
+            }
+            // Back to only running when a group actually needs it.
+            _audio.SetActive(_engine.AudioNeeded);
+        };
+    }
+
+    private void ShowAudioStatus(string? status)
+    {
+        if (status == null)
+        {
+            AudioStatusText.Text = "Listening. Talk near the mic — if the meter moves, raise the gate.";
+            AudioStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+            return;
+        }
+
+        AudioStatusText.Text = status;
+        AudioStatusText.Foreground = System.Windows.Media.Brushes.OrangeRed;
     }
 
     private bool Apply()
@@ -297,6 +404,9 @@ public partial class SettingsWindow : Window
                           || _settings.RemoteKey != RemoteKeyBox.Text.Trim();
         bool displayChanged = _settings.CaptureDisplay != SelectedTag(CaptureDisplayBox);
 
+        if (!int.TryParse(SelectedTag(AudioResponseBox), out int audioResponseMs))
+            audioResponseMs = _settings.AudioResponseMs;
+
         _settings.ProPresenterHost = HostBox.Text.Trim();
         _settings.ProPresenterPort = port;
         _settings.Protocol = protocol;
@@ -306,6 +416,11 @@ public partial class SettingsWindow : Window
         _settings.CaptureDisplay = SelectedTag(CaptureDisplayBox);
         _settings.CaptureSmoothingMs = smoothingMs;
         _settings.CaptureFps = captureFps;
+        // Device and gate are already live — see AudioDevice_Changed — so only the settle time is
+        // new here, and it's read fresh on every buffer.
+        _settings.AudioDeviceId = SelectedTag(AudioDeviceBox);
+        _settings.AudioGateDb = (int)AudioGateSlider.Value;
+        _settings.AudioResponseMs = audioResponseMs;
         _settings.FadeMs = fadeMs;
         _settings.BrightnessPercent = (int)BrightnessSlider.Value;
         _settings.SaturationBoostPercent = (int)SaturationSlider.Value;
@@ -508,6 +623,7 @@ public partial class SettingsWindow : Window
         _engine.ReloadRig();
         _client.Reconnect();
         _screen.Restart();
+        _audio.Restart();
 
         // The imported file carries its own remote settings, so the listener has to be brought into
         // line here. Apply() can't do it afterwards: the fields below now match what was imported,

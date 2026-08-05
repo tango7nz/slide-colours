@@ -71,6 +71,14 @@
                     Click="GroupOff_Click" ToolTipService.ShowOnDisabled="True"
                     ToolTip="Hold this group dark"/>
 
+            <!-- Rides this group's brightness on the music. Not a fourth colour source — it layers
+                 on top of whichever of the three is selected — hence the wider gap setting it
+                 apart from them rather than reading as one more of the same. -->
+            <Button x:Name="BreatheButton" Style="{StaticResource ModeButton}"
+                    Content="Breathe" VerticalAlignment="Center" Margin="14,0,0,0"
+                    Click="Breathe_Click" ToolTipService.ShowOnDisabled="True"
+                    ToolTip="Ride this group's brightness on the music"/>
+
             <TextBlock Text="Output:" Foreground="#FFB8B8C0"
                        FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
                        Margin="12,0,8,0" VerticalAlignment="Center"/>

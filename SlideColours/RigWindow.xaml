@@ -91,8 +91,11 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="110"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="36"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -100,12 +103,12 @@
                     </Grid.RowDefinitions>
 
                     <Label Grid.Row="0" Grid.Column="0" Content="Name:"/>
-                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="GroupNameBox" Margin="0,2"
+                    <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="GroupNameBox" Margin="0,2"
                              VerticalContentAlignment="Center" TextChanged="GroupField_Changed"
                              ToolTip="What this group is called, e.g. Front Wash"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="Colour from:"/>
-                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="GroupSourceBox" Margin="0,2"
+                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" x:Name="GroupSourceBox" Margin="0,2"
                               SelectionChanged="GroupField_Changed"
                               ToolTip="Every group runs at once, each with its own source">
                         <ComboBoxItem Tag="slide" Content="Follow slide"/>
@@ -114,14 +117,30 @@
                         <ComboBoxItem Tag="off" Content="Off — hold these lights dark"/>
                     </ComboBox>
 
-                    <Label Grid.Row="2" Grid.Column="0" Content="Lights in group:" VerticalAlignment="Top"/>
-                    <Border Grid.Row="2" Grid.Column="1" BorderBrush="#FFACACAC" BorderThickness="1" Margin="0,4,0,0">
+                    <Label Grid.Row="2" Grid.Column="0" Content="With the music:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="GroupPulseBox" Margin="0,2"
+                              SelectionChanged="GroupField_Changed"
+                              ToolTip="Breathe rides this group's brightness on the bass. The colour still comes from the source above.">
+                        <ComboBoxItem Tag="off" Content="Steady — ignore the music"/>
+                        <ComboBoxItem Tag="breathe" Content="Breathe with the bass"/>
+                    </ComboBox>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Depth:" x:Name="GroupDepthLabel"/>
+                    <Slider Grid.Row="3" Grid.Column="1" x:Name="GroupDepthSlider" Minimum="0" Maximum="90"
+                            VerticalAlignment="Center" ValueChanged="GroupDepth_Changed"
+                            ToolTip="How far the lights drop between beats. Higher is more dramatic; keep it modest so quiet passages don't look like a fault."/>
+                    <TextBlock Grid.Row="3" Grid.Column="2" x:Name="GroupDepthValue" VerticalAlignment="Center"
+                               TextAlignment="Right"/>
+
+                    <Label Grid.Row="4" Grid.Column="0" Content="Lights in group:" VerticalAlignment="Top"/>
+                    <Border Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" BorderBrush="#FFACACAC"
+                            BorderThickness="1" Margin="0,4,0,0">
                         <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="MembershipPanel" Margin="6,4"/>
                         </ScrollViewer>
                     </Border>
 
-                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" x:Name="GroupHintText" Margin="4,6,0,0"
+                    <TextBlock Grid.Row="5" Grid.ColumnSpan="3" x:Name="GroupHintText" Margin="4,6,0,0"
                                Foreground="Gray" TextWrapping="Wrap"/>
                 </Grid>
             </Grid>

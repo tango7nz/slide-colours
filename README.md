@@ -6,7 +6,8 @@ can park anywhere on screen. It can follow either **the live slide** or **a disp
 sampled many times a second so animated and video backgrounds drive the lights like a TV
 backlight. Name your lights, group them, and each group runs on its own source — so the front wash
 can follow the screen while the sides hold a colour — then save the whole stage as a **scene** you
-can recall in one click. It also doubles as a dead-simple standalone DMX
+can recall in one click. Groups can also **breathe with the music**, riding their brightness on the
+bass in an audio feed while their colour keeps coming from the screen. It also doubles as a dead-simple standalone DMX
 colour controller when you're not driving it from ProPresenter at all (see
 [Using it as a plain DMX controller](#using-it-as-a-plain-dmx-controller)).
 
@@ -54,6 +55,9 @@ is on. When toggled off, it stops transmitting so your lighting desk is back in 
   *ProPresenter → Preferences → Network → tick **Enable Network***, then note the **port** shown there.
 - For **Follow screen**: nothing extra — it uses a display already attached to this PC. (The
   screen must be connected and awake; see [Good to know](#good-to-know).)
+- For **Breathing with the music**: an audio input. Nothing extra if this PC plays the music, but a
+  line feed from the sound desk into a USB audio interface is much better — see
+  [Choosing an audio input](#choosing-an-audio-input).
 - A DMX route, one of:
   - **Art-Net** node/gateway on the network (default)
   - **sACN (E1.31)** node on the network
@@ -82,6 +86,11 @@ default). From left to right:
   backgrounds and video come through. Highlighted blue while active; hover it to see which display
   it's watching, or why capture isn't working. Choose the display in **Settings**.
 - **Off** — holds the selected group dark while every other group keeps running.
+- **Breathe** — toggles the selected group reacting to the music, riding its brightness on the bass.
+  Set slightly apart from the three buttons above because it isn't a fourth source: it layers on
+  top of whichever one is selected, so a group can follow the screen *and* breathe. Highlighted
+  blue while active; hover it to see why the audio input isn't working. See
+  [Breathing with the music](#breathing-with-the-music).
 - **Output:** toggle — turns stage-lighting control on/off for the whole rig. This is the only
   control you need mid-service.
 - **Colour circle** (far right) — shows the colour the selected group is sending (dimmed while off).
@@ -114,6 +123,58 @@ Each group is set to one of:
 
 Every group's source is remembered for next launch. Screen capture only runs while at least one
 group is actually following the screen.
+
+### Breathing with the music
+
+Any group can be set to **breathe**: its brightness rides the bass in an audio feed, swinging
+between full and a floor you choose, so the lights move with the band. This is deliberately
+*separate* from the colour source — a group following the screen keeps taking its hue from the
+picture and only the intensity moves.
+
+Toggle it live for the selected group with the pill's **Breathe** button, or set it up ahead of
+time per group in **Settings → Lights & groups**, under **With the music** — which is also where
+the depth lives.
+
+**Depth** is how far the lights drop between beats. 40% means they breathe between 60% and 100%.
+Keep it modest: lights that fall to black on every beat read as a fault rather than an effect, and
+a shallow swing is also the kinder choice for anyone photosensitive in the room.
+
+Because breathing is stored per group and captured in scenes, the practical setup is one scene for
+the songs with the wash breathing, and another for the message with everything steady — one click
+each.
+
+#### Choosing an audio input
+
+Set this in **Settings → Music reaction**. In order of preference:
+
+1. **A line feed from the sound desk.** Run an aux, matrix or monitor send into a USB audio
+   interface on this PC and pick it as the input. It's electrically clean — no room, no
+   congregation, no chatter at the desk — and you choose what's in it. Send that aux only the kick,
+   bass and drum channels and the lights physically cannot react to anyone speaking. This is the
+   right answer if you're doing it properly.
+2. **What this PC plays** (the default). No cabling at all, captured as loopback. Only useful if
+   this machine is the thing playing the music — backing tracks, click, or a video.
+3. **A microphone.** It works, but it hears the room.
+
+Only the **40–120 Hz** band is measured, which is why option 3 is viable at all. Kick and bass
+guitar live there; speech fundamentals sit above it with most of their energy higher still. In
+testing, a 900 Hz tone — squarely in the speech range — moved the level about 2% as much as a 60 Hz
+one. Someone talking near an open mic barely registers; someone thumping the desk still might.
+
+**Setting the gate.** *Silence below* is the level under which the feed counts as silence and the
+lights simply settle. Open Settings, watch the **Bass level** meter, and have someone talk near the
+mic — push the gate up until the meter stops responding to them, then check it still swings on the
+music. The meter runs whenever Settings is open, whether or not anything is currently breathing, so
+you can set this up before the service.
+
+Everything else adapts on its own: the loudest recent bass reads as full, so the gain on the feed
+doesn't need to be right, only stable. **Settle time** controls how quickly the lights fall back
+after a beat — they always rise fast.
+
+The audio device is only opened while a group is actually breathing (or while Settings is open). If
+the input fails or is unplugged mid-service, breathing groups hold at **full brightness** rather
+than at the bottom of their swing — a stage that's quietly gone dim looks like a fault and there's
+no way to tell from up there.
 
 ### Scenes
 
@@ -210,8 +271,9 @@ and set its **start channel**. The layout is R, G, B — or Dimmer, R, G, B if y
 master-dimmer box. The list shows the channel range each light occupies, and warns you if two
 lights overlap or a light isn't in any group.
 
-**Groups** (right) — click **Add group**, name it, choose where its colour comes from, and tick the
-lights that belong to it. A light can be in more than one group.
+**Groups** (right) — click **Add group**, name it, choose where its colour comes from, whether it
+breathes **with the music**, and tick the lights that belong to it. A light can be in more than one
+group.
 
 <p align="center">
   <img src="docs/images/lights-groups.png" width="760"
@@ -308,6 +370,10 @@ a separate Companion machine.
 - On a laptop with switchable graphics, Windows may put Slide Colours on a different GPU from
   the one driving the output screen, which blocks capture. The hover tooltip on **Follow screen**
   says so if it happens; fix it in *Windows Settings → System → Display → Graphics*.
+- **Breathing** only shapes intensity, never colour, so it layers on top of whatever a group's
+  source is doing. If a light is in both a breathing group and a steady one, the steady group holds
+  the floor and the breathing only shows above it — that's the same highest-takes-precedence rule
+  used everywhere else, but it does mean the light breathes less than you might expect.
 - When toggled **off**, the app stops sending DMX entirely (it doesn't send blackout), so a
   console merging via HTP/LTP will simply take back control.
 - While it *is* sending, channels that don't belong to any of your lights are sent as 0. Patch your
