@@ -509,6 +509,13 @@ public partial class SettingsWindow : Window
         _client.Reconnect();
         _screen.Restart();
 
+        // The imported file carries its own remote settings, so the listener has to be brought into
+        // line here. Apply() can't do it afterwards: the fields below now match what was imported,
+        // so it sees nothing changed and leaves the server as it was.
+        _remote.Restart();
+        if (_remote.Status is { } remoteProblem)
+            WpfMessageBox.Show(this, remoteProblem, "Slide Colours", MessageBoxButton.OK, MessageBoxImage.Warning);
+
         LoadFromSettings();
     }
 
