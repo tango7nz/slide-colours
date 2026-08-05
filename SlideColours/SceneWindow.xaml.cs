@@ -4,6 +4,7 @@ using System.Windows.Media;
 using SlideColours.Models;
 using SlideColours.Services;
 using WpfButton = System.Windows.Controls.Button;
+using WpfCheckBox = System.Windows.Controls.CheckBox;
 using WpfColor = System.Windows.Media.Color;
 using WpfColorConverter = System.Windows.Media.ColorConverter;
 using WpfComboBox = System.Windows.Controls.ComboBox;
@@ -21,13 +22,23 @@ public partial class SceneWindow : Window
     private readonly LightingEngine _engine;
     private readonly List<Scene> _scenes;
 
-    /// <summary>One editable row: the group, the source picked for it, and its manual colour.</summary>
+    /// <summary>
+    /// One editable row: the group, the source picked for it, its manual colour, and whether it
+    /// breathes with the music.
+    /// </summary>
     private sealed class GroupRow
     {
         public required string GroupId { get; init; }
         public required WpfComboBox SourceBox { get; init; }
         public required WpfButton ColourButton { get; init; }
+        public required WpfCheckBox BreatheCheck { get; init; }
         public WpfColor Colour { get; set; }
+
+        /// <summary>
+        /// Carried through untouched. How deep a group breathes is a property of the rig, edited in
+        /// Lights &amp; groups; a scene only records whether it breathes at all.
+        /// </summary>
+        public int PulseDepthPercent { get; set; } = 40;
     }
 
     private readonly List<GroupRow> _rows = new();
@@ -97,9 +108,12 @@ public partial class SceneWindow : Window
                 var group = _settings.Groups.FirstOrDefault(g => g.Id == row.GroupId);
                 string source = entry?.Source ?? group?.Source ?? ColourSources.Slide;
                 string colour = entry?.ManualColour ?? group?.ManualColour ?? "#FFFFFF";
+                string pulse = entry?.Pulse ?? group?.Pulse ?? PulseModes.Off;
 
                 SelectByTag(row.SourceBox, source);
                 SetRowColour(row, ParseColour(colour));
+                row.BreatheCheck.IsChecked = pulse == PulseModes.Breathe;
+                row.PulseDepthPercent = entry?.PulseDepthPercent ?? group?.PulseDepthPercent ?? 40;
             }
         }
 
@@ -181,6 +195,7 @@ public partial class SceneWindow : Window
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
 
             var label = new TextBlock
             {
@@ -210,12 +225,32 @@ public partial class SceneWindow : Window
             colourButton.Click += Row_ColourClick;
             Grid.SetColumn(colourButton, 2);
 
+            // Breathing is independent of the source, so it's a tick rather than another entry in
+            // the dropdown — a group can follow the screen and breathe at the same time.
+            var breatheCheck = new WpfCheckBox
+            {
+                Content = "Breathe",
+                Margin = new Thickness(12, 2, 0, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Ride this group's brightness on the music in this scene",
+            };
+            breatheCheck.Checked += Row_BreatheChanged;
+            breatheCheck.Unchecked += Row_BreatheChanged;
+            Grid.SetColumn(breatheCheck, 3);
+
             grid.Children.Add(label);
             grid.Children.Add(sourceBox);
             grid.Children.Add(colourButton);
+            grid.Children.Add(breatheCheck);
             GroupRows.Children.Add(grid);
 
-            var row = new GroupRow { GroupId = group.Id, SourceBox = sourceBox, ColourButton = colourButton };
+            var row = new GroupRow
+            {
+                GroupId = group.Id,
+                SourceBox = sourceBox,
+                ColourButton = colourButton,
+                BreatheCheck = breatheCheck,
+            };
             sourceBox.Tag = row;
             colourButton.Tag = row;
             _rows.Add(row);
@@ -228,6 +263,12 @@ public partial class SceneWindow : Window
             return;
         RefreshRowStates();
         UpdateHint();
+    }
+
+    private void Row_BreatheChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_suspend)
+            UpdateHint();
     }
 
     private void Row_ColourClick(object sender, RoutedEventArgs e)
@@ -274,6 +315,10 @@ public partial class SceneWindow : Window
         if (screen > 0) parts.Add($"{screen} following the screen");
         if (manual > 0) parts.Add($"{manual} on a fixed colour");
         if (off > 0) parts.Add($"{off} off");
+
+        int breathing = _rows.Count(r => r.BreatheCheck.IsChecked == true);
+        if (breathing > 0) parts.Add($"{breathing} breathing with the music");
+
         SceneHintText.Text = string.Join(", ", parts);
     }
 
@@ -320,6 +365,8 @@ public partial class SceneWindow : Window
             GroupId = row.GroupId,
             Source = SelectedTag(row.SourceBox),
             ManualColour = $"#{row.Colour.R:X2}{row.Colour.G:X2}{row.Colour.B:X2}",
+            Pulse = row.BreatheCheck.IsChecked == true ? PulseModes.Breathe : PulseModes.Off,
+            PulseDepthPercent = row.PulseDepthPercent,
         }).ToList();
     }
 

@@ -13,7 +13,7 @@ colour controller when you're not driving it from ProPresenter at all (see
 
 <p align="center">
   <img src="docs/images/pill.png" width="880"
-       alt="The floating Slide Colours pill: close, settings cog, a Scene picker set to Pre-service, a Group picker set to Side Wash, ten favourite-colour swatches, Follow slide, Follow screen and Off buttons, an Output toggle, and the current-colour circle">
+       alt="The floating Slide Colours pill: close, settings cog, a Scene picker set to Worship, a Group picker set to Front Wash, ten favourite-colour swatches, Follow slide, Follow screen and Off buttons, a Breathe button, an Output toggle, and the current-colour circle. Follow screen and Breathe are both highlighted, because breathing layers on top of the colour source rather than replacing it.">
 </p>
 
 ## Download
@@ -191,8 +191,12 @@ From then on, picking that scene from the pill's **Scene** box restores it.
 
 <p align="center">
   <img src="docs/images/scenes.png" width="760"
-       alt="The Scenes editor: a list of scenes named Pre-service, Worship and Message on the left; on the right, what the selected Worship scene sets for each group — Front Wash following the screen and Side Wash holding a blue colour">
+       alt="The Scenes editor: a list of scenes named Pre-service, Worship and Message on the left; on the right, what the selected Worship scene sets for each group — Front Wash following the screen and Side Wash holding a blue colour, both with Breathe ticked">
 </p>
+
+Each row also has a **Breathe** tick, so a scene records which groups react to the music as well as
+where their colour comes from. That's what makes "Worship breathes, Message doesn't" a single click
+each rather than something to remember to switch by hand.
 
 **A scene is a snapshot, not a live link.** Changing a colour mid-service edits the *group*, never
 the scene — so what a scene restores is the look you deliberately saved, not whatever last Sunday
@@ -237,7 +241,7 @@ Click the **cog** → **Settings…**
 
 <p align="center">
   <img src="docs/images/settings.png" width="760"
-       alt="The Slide Colours Settings window in two columns: ProPresenter connection, DMX output, lights/groups/scenes, screen capture and remote control on the left; colour behaviour, updates, startup options and the settings file on the right">
+       alt="The Slide Colours Settings window in three columns: ProPresenter connection, screen capture and music reaction on the left; DMX output, lights/groups/scenes, colour behaviour and startup in the middle; remote control, updates and the settings file on the right">
 </p>
 
 | Setting | Notes |
@@ -277,7 +281,7 @@ group.
 
 <p align="center">
   <img src="docs/images/lights-groups.png" width="760"
-       alt="The Lights and groups editor: five named lights with their DMX channels on the left, groups on the right with a source picker and tick boxes choosing which lights belong to the selected group">
+       alt="The Lights and groups editor: five named lights with their DMX channels on the left, groups on the right with a source picker, a &quot;With the music&quot; picker set to breathe, a depth slider, and tick boxes choosing which lights belong to the selected group">
 </p>
 
 For example:
