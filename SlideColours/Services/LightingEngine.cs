@@ -552,10 +552,19 @@ public class LightingEngine : IDisposable
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
         var last = DateTime.UtcNow;
-        try
+        var lastFault = DateTime.MinValue;
+
+        // Nothing but shutdown may end this loop. It is the only thing driving the rig, so dying
+        // here stops the lights with no indication whatsoever — the one failure the operator has
+        // no way to diagnose from the stage. Everything risky inside already handles itself, so
+        // reaching the catch below means something genuinely unforeseen.
+        while (true)
         {
-            while (await timer.WaitForNextTickAsync(_cts.Token))
+            try
             {
+                if (!await timer.WaitForNextTickAsync(_cts.Token))
+                    break;
+
                 var now = DateTime.UtcNow;
                 double dtMs = (now - last).TotalMilliseconds;
                 last = now;
@@ -596,9 +605,24 @@ public class LightingEngine : IDisposable
                     OutputChanged?.Invoke(visible, sending);
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                var faultedAt = DateTime.UtcNow;
+                // Don't let the time spent failing arrive as one enormous fade step.
+                last = faultedAt;
+
+                // A fault that persists would otherwise write to the log 30 times a second.
+                if (faultedAt - lastFault < TimeSpan.FromSeconds(5))
+                    continue;
+                lastFault = faultedAt;
+
+                ErrorLog.Write("DMX loop", ex);
+                OutputError?.Invoke($"Lighting engine error: {ex.Message}");
+            }
         }
     }
 

@@ -97,6 +97,25 @@ default). From left to right:
 
 **Drag** any empty part of the pill to move it; the position is remembered (and kept on-screen).
 
+### When something breaks
+
+Whatever a control depends on, the control says so — you shouldn't have to go looking from a dark
+booth. A broken input puts an **amber outline** on the button that relies on it:
+
+- **Follow screen** — the display can't be captured (asleep, unplugged, or taken over by a
+  full-screen app).
+- **Breathe** — the audio input won't open, or has been unplugged. Breathing groups hold at full
+  brightness while this is showing, rather than sitting at the bottom of their swing.
+- **Follow slide** — greys out whenever ProPresenter is disconnected, and goes amber on top of that
+  if the selected group was actually relying on it. A group on a manual colour doesn't need
+  ProPresenter, so it isn't flagged as a fault.
+- **The colour circle** — its ring turns amber when DMX isn't reaching your rig. The colour inside
+  keeps fading either way, so the ring is the only thing that can tell you it's going nowhere.
+
+Hover any of them for the reason. An **amber dot on the cog** means something unexpected happened
+and was caught rather than being allowed to close the app — the details are in
+`%APPDATA%\SlideColours\error.log`, and it's worth sending them my way if you see it.
+
 ### Lights and groups
 
 A **light** is one fixture: a name you recognise ("Left Front") and the DMX channel its colour
@@ -123,6 +142,14 @@ Each group is set to one of:
 
 Every group's source is remembered for next launch. Screen capture only runs while at least one
 group is actually following the screen.
+
+#### Which one should I use?
+
+**Follow slide** is the lighter option and reacts exactly when the slide changes — ideal if your
+slides carry their own solid or gradient backgrounds. **Follow screen** costs a few percent of
+one CPU core but is the only one that can see a moving background, and it doesn't care how the
+look was built. If lyrics are transparent text over a motion background on ProPresenter's media
+layer, **Follow screen** is the one you want — the slide thumbnail alone has no colour in it.
 
 ### Breathing with the music
 
@@ -209,14 +236,6 @@ start of every service.
 
 Groups added after a scene was saved simply aren't mentioned by it, and are left running as they
 are. Deleting a group removes it from every scene.
-
-#### Which one should I use?
-
-**Follow slide** is the lighter option and reacts exactly when the slide changes — ideal if your
-slides carry their own solid or gradient backgrounds. **Follow screen** costs a few percent of
-one CPU core but is the only one that can see a moving background, and it doesn't care how the
-look was built. If lyrics are transparent text over a motion background on ProPresenter's media
-layer, **Follow screen** is the one you want — the slide thumbnail alone has no colour in it.
 
 ## Using it as a plain DMX controller
 
@@ -337,7 +356,7 @@ It's **off by default**. Turn it on in **Settings → Remote control (Stream Dec
 | `GET /` | Human-readable page listing the URLs for your scenes |
 | `GET /scene/{name}` | Recalls that scene. Name matching ignores case; URL-encode spaces (`Front%20Wash`) |
 | `GET /output/on` · `/output/off` · `/output/toggle` | Turns DMX output on or off — a blackout button |
-| `GET /status` | JSON: `{"output":true,"active":"Worship","scenes":["Worship","Preach"]}` |
+| `GET /status` · `/scenes` | JSON: `{"output":true,"active":"Worship","scenes":["Worship","Preach"]}` (`/scenes` is an alias — it's the name most people guess) |
 
 Every request needs `?key=yourkey` (or an `X-Api-Key` header) unless you clear the key.
 
@@ -384,6 +403,13 @@ a separate Companion machine.
   lights so they don't collide with fixtures you drive from a console on the same universe.
 - All groups share one universe. Lights spanning multiple universes aren't supported yet.
 - Settings, your rig, and your ten favourite colours live in `%APPDATA%\SlideColours\settings.json`.
+- **Only one copy runs at a time.** Launching it again tells you it's already running and stops,
+  rather than starting a second instance that would fight the first over the same universe.
+- An unexpected fault is written to `%APPDATA%\SlideColours\error.log` and the app keeps running,
+  instead of closing mid-service. The amber dot on the cog appears when there's something in it.
+- Starting it as `SlideColours.exe --settings "D:\somewhere\other.json"` uses that file instead of
+  the usual one — useful for trying a different rig, or a spare configuration, without disturbing
+  the one you actually run services on.
 
 ## Deploying to another PC
 

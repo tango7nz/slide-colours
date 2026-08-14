@@ -29,6 +29,11 @@
                          Fill="#FF3A6FF0" Stroke="#F0202028" StrokeThickness="1.5"
                          Visibility="Collapsed" IsHitTestVisible="False"
                          ToolTip="An update is available — open Settings to install"/>
+                <!-- Amber, and below the blue update dot so the two can show at once -->
+                <Ellipse x:Name="FaultBadge" Width="9" Height="9"
+                         HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1"
+                         Fill="#FFFFB03A" Stroke="#F0202028" StrokeThickness="1.5"
+                         Visibility="Collapsed" IsHitTestVisible="False"/>
             </Grid>
 
             <!-- saved looks: picking one sets every group at once -->

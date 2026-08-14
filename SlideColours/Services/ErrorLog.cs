@@ -17,6 +17,17 @@ public static class ErrorLog
     private const long MaxBytes = 256 * 1024;
 
     private static readonly object Sync = new();
+    private static int _count;
+
+    /// <summary>
+    /// Raised after an entry is written, so the pill can show that something went wrong rather than
+    /// leaving it to be discovered in the log afterwards. Fires on whichever thread failed, so a
+    /// subscriber has to marshal to its own.
+    /// </summary>
+    public static event Action? Written;
+
+    /// <summary>Entries written this run, so a window built later can still catch up.</summary>
+    public static int Count => Volatile.Read(ref _count);
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SlideColours", "error.log");
@@ -42,6 +53,17 @@ public static class ErrorLog
         catch
         {
             // No disk, no permission, no profile — there is nowhere else to report this to.
+        }
+
+        // Outside the write: the pill should light up even if the log itself couldn't be saved,
+        // and a subscriber that throws must not become a second failure on top of the first.
+        Interlocked.Increment(ref _count);
+        try
+        {
+            Written?.Invoke();
+        }
+        catch
+        {
         }
     }
 

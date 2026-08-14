@@ -33,6 +33,13 @@ public partial class MainWindow : Window
     private static readonly WpfBrush ModeMutedBrush = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0xB8, 0xC0));
     private static readonly WpfBrush ModeFaintBorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
 
+    /// <summary>
+    /// Marks a control whose input has broken. Amber rather than red: the lights are still running
+    /// on whatever they last had, so this is "look at me", not "everything has stopped".
+    /// </summary>
+    private static readonly WpfBrush ModeFaultBrush = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0xB0, 0x3A));
+    private static readonly WpfBrush SwatchNormalStroke = new SolidColorBrush(WpfColor.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+
     public MainWindow(AppSettings settings, LightingEngine engine, ProPresenterClient client,
         ScreenColourSource screen, AudioLevelSource audio, UpdateService update, RemoteControlServer remote)
     {
@@ -103,7 +110,18 @@ public partial class MainWindow : Window
         _engine.OutputError += error => Dispatcher.BeginInvoke(() =>
         {
             ColourSwatch.ToolTip = error ?? "Current output colour";
+            // The colour itself keeps fading whether or not it's reaching the rig, so the ring
+            // around it is the only thing that can say the DMX isn't going anywhere.
+            ColourSwatch.Stroke = error != null ? ModeFaultBrush : SwatchNormalStroke;
         });
+
+        // Something failed unexpectedly and was caught rather than being allowed to close the app.
+        // Nothing may be visibly wrong, so the dot on the cog is the only way to know to look.
+        FaultBadge.ToolTip = $"Something went wrong — details are in\n{ErrorLog.FilePath}";
+        if (ErrorLog.Count > 0)
+            FaultBadge.Visibility = Visibility.Visible;
+        ErrorLog.Written += () => Dispatcher.BeginInvoke(() =>
+            FaultBadge.Visibility = Visibility.Visible);
 
         // The engine has been running since startup, so ask it to re-announce where it got to.
         _engine.ResendOutputState();
@@ -310,7 +328,10 @@ public partial class MainWindow : Window
         // Following slides is only possible while ProPresenter is connected. Screen capture needs
         // nothing but a display, so that button is always available.
         FollowSlideButton.IsEnabled = hasGroup && _connected;
-        Highlight(FollowSlideButton, source == ColourSources.Slide);
+        // Only a fault if this group is actually relying on it — ProPresenter being closed while
+        // you're running on manual colours is a normal way to work, not a problem.
+        Highlight(FollowSlideButton, source == ColourSources.Slide,
+            !_connected && source == ColourSources.Slide);
         FollowSlideButton.ToolTip = !hasGroup
             ? "Add a group in Settings → Lights & groups"
             : !_connected
@@ -320,7 +341,9 @@ public partial class MainWindow : Window
                     : $"Click to match {group} to the live slide";
 
         FollowScreenButton.IsEnabled = hasGroup;
-        Highlight(FollowScreenButton, source == ColourSources.Screen);
+        // Capture is only open while some group needs it, so a status here always means something
+        // that is being relied on right now has broken.
+        Highlight(FollowScreenButton, source == ColourSources.Screen, _captureStatus != null);
         FollowScreenButton.ToolTip = _captureStatus
             ?? (!hasGroup
                 ? "Add a group in Settings → Lights & groups"
@@ -341,7 +364,7 @@ public partial class MainWindow : Window
         // actually breathing — that's the only time the input is open and a failure matters.
         bool breathing = hasGroup && _engine.PulseOf(groupId!) == PulseModes.Breathe;
         BreatheButton.IsEnabled = hasGroup;
-        Highlight(BreatheButton, breathing);
+        Highlight(BreatheButton, breathing, _audioStatus != null);
         BreatheButton.ToolTip = !hasGroup
             ? "Add a group in Settings → Lights & groups"
             : breathing
@@ -361,11 +384,16 @@ public partial class MainWindow : Window
             ? "the main display"
             : MonitorInfo.Describe(_settings.CaptureDisplay, null);
 
-    private static void Highlight(WpfButton button, bool active)
+    /// <summary>
+    /// Paints one of the mode buttons. A faulted button keeps an amber outline whether or not it's
+    /// the selected source, so a broken input is visible at a glance from the booth rather than
+    /// only to someone hovering it for a tooltip.
+    /// </summary>
+    private static void Highlight(WpfButton button, bool active, bool fault = false)
     {
         button.Background = active ? ModeActiveBrush : Brushes.Transparent;
-        button.Foreground = active ? Brushes.White : ModeMutedBrush;
-        button.BorderBrush = active ? ModeActiveBrush : ModeFaintBorderBrush;
+        button.Foreground = active ? Brushes.White : fault ? ModeFaultBrush : ModeMutedBrush;
+        button.BorderBrush = fault ? ModeFaultBrush : active ? ModeActiveBrush : ModeFaintBorderBrush;
     }
 
     private void PositionPickerNearPill(Window picker)
