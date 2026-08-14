@@ -31,15 +31,27 @@ public class ProPresenterClient
         ConnectionChanged?.Invoke(connected);
     }
 
-    /// <summary>Drops the current connection so the next attempt picks up new host/port settings.</summary>
-    public void Reconnect() => _connectionCts?.Cancel();
+    /// <summary>
+    /// Drops the current connection so the next attempt picks up new host/port settings. The source
+    /// being cancelled is disposed by the retry loop between attempts, so a call that races that
+    /// swap has simply arrived while there was nothing connected to drop.
+    /// </summary>
+    public void Reconnect()
+    {
+        try { _connectionCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
 
     public async Task RunAsync(CancellationToken appToken)
     {
         while (!appToken.IsCancellationRequested)
         {
-            _connectionCts = CancellationTokenSource.CreateLinkedTokenSource(appToken);
-            var ct = _connectionCts.Token;
+            // Disposed at the end of every attempt. Each linked source registers a callback on the
+            // app-lifetime token that only disposal removes, and with ProPresenter unreachable this
+            // loop comes round every 3 seconds for the whole service.
+            var connection = CancellationTokenSource.CreateLinkedTokenSource(appToken);
+            _connectionCts = connection;
+            var ct = connection.Token;
             string baseUrl = $"http://{_settings.ProPresenterHost}:{_settings.ProPresenterPort}";
 
             try
@@ -104,6 +116,11 @@ public class ProPresenterClient
             catch
             {
                 // connection refused / dropped / bad JSON — retry below
+            }
+            finally
+            {
+                _connectionCts = null;
+                connection.Dispose();
             }
 
             SetConnected(false);

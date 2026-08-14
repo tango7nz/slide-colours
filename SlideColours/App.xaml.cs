@@ -6,6 +6,16 @@ namespace SlideColours;
 
 public partial class App : System.Windows.Application
 {
+    /// <summary>
+    /// Held for the life of the process to keep a second copy from starting. Two instances would
+    /// both transmit to the same universe 30 times a second and fight over the frame, both write
+    /// settings.json, and the second one's remote-control listener would fail to bind.
+    ///
+    /// Local rather than Global: one instance per Windows session is the right rule, and a Global
+    /// name would also need an ACL to work across accounts on a shared booth PC.
+    /// </summary>
+    private static Mutex? _instanceLock;
+
     private readonly CancellationTokenSource _cts = new();
     private AppSettings _settings = null!;
     private LightingEngine _engine = null!;
@@ -18,6 +28,13 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // First, so that everything below — including a rejected second copy's own shutdown — is
+        // covered by it.
+        InstallLastChanceHandlers();
+
+        if (!ClaimSingleInstance())
+            return;
 
         for (int i = 0; i < e.Args.Length - 1; i++)
             if (e.Args[i] == "--settings")
@@ -65,14 +82,75 @@ public partial class App : System.Windows.Application
             _ = _update.CheckAsync(_cts.Token);
     }
 
+    /// <summary>
+    /// Takes the single-instance lock, or tells the user which app is already running and asks WPF
+    /// to shut this copy down. Returns false when startup must not continue.
+    /// </summary>
+    private bool ClaimSingleInstance()
+    {
+        try
+        {
+            _instanceLock = new Mutex(initiallyOwned: true, @"Local\SlideColours", out bool mine);
+            if (mine)
+                return true;
+
+            _instanceLock.Dispose();
+            _instanceLock = null;
+        }
+        catch (Exception ex)
+        {
+            // An unusable mutex is no reason to refuse to run — worst case we're back to the old
+            // behaviour of allowing a second copy.
+            ErrorLog.Write("single-instance check", ex);
+            return true;
+        }
+
+        MessageBox.Show(
+            "Slide Colours is already running.\n\nLook for the floating pill — it may be behind "
+            + "another window or on a different screen.",
+            "Slide Colours", MessageBoxButton.OK, MessageBoxImage.Information);
+        Shutdown();
+        return false;
+    }
+
+    /// <summary>
+    /// Keeps an unexpected failure from taking the lights out with it. Every background loop
+    /// already catches and retries; the UI thread had no net at all, so a single stray exception
+    /// there ended the process — and the DMX output — mid-service.
+    /// </summary>
+    private void InstallLastChanceHandlers()
+    {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            ErrorLog.Write("UI thread", args.Exception);
+            // Carry on. The engine, capture and output all live on their own threads and are
+            // unaffected by whatever the UI was in the middle of.
+            args.Handled = true;
+        };
+
+        // The process is already going down by the time this runs; all we can do is leave a record.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            ErrorLog.Write("background thread", args.ExceptionObject as Exception);
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            ErrorLog.Write("unobserved task", args.Exception);
+            args.SetObserved();
+        };
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        // Null when a second instance shut itself down before any of this was built.
         _cts.Cancel();
-        _remote.Dispose();
-        _screen.Dispose();
-        _audio.Dispose();
-        _engine.Dispose();
-        _settings.Save();
+        _remote?.Dispose();
+        _screen?.Dispose();
+        _audio?.Dispose();
+        _engine?.Dispose();
+        _settings?.Save();
+
+        _instanceLock?.ReleaseMutex();
+        _instanceLock?.Dispose();
         base.OnExit(e);
     }
 }

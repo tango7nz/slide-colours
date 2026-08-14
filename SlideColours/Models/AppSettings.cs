@@ -91,7 +91,15 @@ public class AppSettings
     public bool AutoCheckForUpdates { get; set; } = true; // check GitHub for a newer version on startup
     public double WindowLeft { get; set; } = double.NaN;
     public double WindowTop { get; set; } = double.NaN;
-    public string[] FavouriteColours { get; set; } = new[]
+
+    /// <summary>
+    /// How many swatches the pill shows. The main window indexes
+    /// <see cref="FavouriteColours"/> directly, so <see cref="MigrateRig"/> guarantees exactly
+    /// this many entries however mangled the stored array was.
+    /// </summary>
+    public const int FavouriteCount = 10;
+
+    private static readonly string[] DefaultFavouriteColours =
     {
         "#FF0000",
         "#00FF00",
@@ -104,6 +112,8 @@ public class AppSettings
         "#7F00FF",
         "#808080"
     };
+
+    public string[] FavouriteColours { get; set; } = (string[])DefaultFavouriteColours.Clone();
 
     /// <summary>Set from the --settings command-line argument to use a custom settings file.</summary>
     public static string? OverridePath { get; set; }
@@ -197,6 +207,23 @@ public class AppSettings
 
         if (StartupSceneId.Length > 0 && !Scenes.Any(s => s.Id == StartupSceneId))
             StartupSceneId = "";
+
+        FavouriteColours = NormaliseFavourites(FavouriteColours);
+    }
+
+    /// <summary>
+    /// Forces the swatch list to exactly <see cref="FavouriteCount"/> entries, padding from the
+    /// defaults. A hand-edited or truncated settings file can carry null, an empty array or a short
+    /// one, and the pill builds its buttons by index — so anything else crashes the main window's
+    /// constructor, i.e. the app won't start at all.
+    /// </summary>
+    private static string[] NormaliseFavourites(string[]? stored)
+    {
+        var result = (string[])DefaultFavouriteColours.Clone();
+        for (int i = 0; i < FavouriteCount && i < (stored?.Length ?? 0); i++)
+            if (!string.IsNullOrWhiteSpace(stored![i]))
+                result[i] = stored[i];
+        return result;
     }
 
     /// <summary>The scene to recall on launch, or null when none is pinned or it no longer exists.</summary>

@@ -117,6 +117,13 @@ public class AudioLevelSource : IDisposable
                 }
             }
         }
+        else
+        {
+            // Nothing is listening any more, so a failure from the last time we were is no longer
+            // true. Left set it stays pinned in the Breathe tooltip, and holds the engine's
+            // "audio is broken" flag, until the device happens to succeed again.
+            Report(null);
+        }
         _wake.Set();
     }
 

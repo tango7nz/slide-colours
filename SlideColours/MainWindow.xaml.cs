@@ -127,9 +127,9 @@ public partial class MainWindow : Window
     private void BuildFavouriteButtons()
     {
         FavouritePanel.Children.Clear();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < AppSettings.FavouriteCount; i++)
         {
-            var colour = ParseColour(_settings.FavouriteColours[Math.Clamp(i, 0, _settings.FavouriteColours.Length - 1)]);
+            var colour = ParseColour(_settings.FavouriteColours[i]);
             var button = new WpfButton
             {
                 Style = (Style)FindResource("SwatchButton"),
@@ -171,13 +171,23 @@ public partial class MainWindow : Window
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
+        if (e.ButtonState != MouseButtonState.Pressed)
+            return;
+
+        try
         {
             DragMove();
-            _settings.WindowLeft = Left;
-            _settings.WindowTop = Top;
-            _settings.Save();
         }
+        catch (InvalidOperationException)
+        {
+            // The button was let go between the event being raised and this call — a quick click
+            // on the pill is enough. There's nothing to drag, and the position below is still the
+            // one worth keeping.
+        }
+
+        _settings.WindowLeft = Left;
+        _settings.WindowTop = Top;
+        _settings.Save();
     }
 
     private void EnableToggle_Changed(object sender, RoutedEventArgs e)
@@ -435,10 +445,7 @@ public partial class MainWindow : Window
         for (int i = 0; i < FavouritePanel.Children.Count; i++)
         {
             if (FavouritePanel.Children[i] is WpfButton button)
-            {
-                var colour = ParseColour(_settings.FavouriteColours[Math.Clamp(i, 0, _settings.FavouriteColours.Length - 1)]);
-                button.Background = new SolidColorBrush(colour);
-            }
+                button.Background = new SolidColorBrush(ParseColour(_settings.FavouriteColours[i]));
         }
     }
 
