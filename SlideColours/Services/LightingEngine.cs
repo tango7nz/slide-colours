@@ -708,6 +708,7 @@ public class LightingEngine : IDisposable
     {
         "sacn" => new SacnOutput(_settings.TargetIp, _settings.Universe),
         "enttec" => new EnttecProOutput(_settings.ComPort),
+        "xpress" => new Xpress512Output(),
         _ => new ArtNetOutput(_settings.TargetIp, _settings.Universe),
     };
 

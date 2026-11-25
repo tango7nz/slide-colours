@@ -62,6 +62,9 @@ is on. When toggled off, it stops transmitting so your lighting desk is back in 
   - **Art-Net** node/gateway on the network (default)
   - **sACN (E1.31)** node on the network
   - **Enttec DMX USB Pro** (or compatible) on a COM port
+  - **Chauvet Xpress 512** on USB (the original silver ShowXpress box). Close ShowXpress
+    before sending — only one program can open the box. The ShowXpress USB driver has to be
+    installed, which it already is if ShowXpress can see the interface.
 
 ## Running it
 
@@ -266,7 +269,7 @@ Click the **cog** → **Settings…**
 | Setting | Notes |
 |---|---|
 | ProPresenter host/port | Usually `127.0.0.1` and the port from Preferences → Network |
-| Protocol | Art-Net, sACN, or Enttec USB Pro |
+| Protocol | Art-Net, sACN, Enttec USB Pro, or Chauvet Xpress 512 |
 | Target IP | Blank = broadcast (Art-Net) / multicast (sACN). Click **Scan…** to search the network (Art-Net discovery) and pick your node from a list |
 | Universe | Art-Net counts from 0, sACN counts from 1 |
 | Lights & groups | Opens the rig editor — see below. This replaces the single start-channel box from earlier versions |

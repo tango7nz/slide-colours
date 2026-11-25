@@ -157,6 +157,7 @@
                         <ComboBoxItem Tag="artnet" Content="Art-Net (network)"/>
                         <ComboBoxItem Tag="sacn" Content="sACN / E1.31 (network)"/>
                         <ComboBoxItem Tag="enttec" Content="Enttec DMX USB Pro (serial)"/>
+                        <ComboBoxItem Tag="xpress" Content="Chauvet Xpress 512 (USB)"/>
                     </ComboBox>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="Target IP:" x:Name="TargetIpLabel"/>
@@ -174,6 +175,10 @@
 
                     <Label Grid.Row="3" Grid.Column="0" Content="COM port:" x:Name="ComPortLabel"/>
                     <ComboBox Grid.Row="3" Grid.Column="1" x:Name="ComPortBox" Margin="0,2" IsEditable="True"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" x:Name="XpressNote"
+                               Margin="4,6,0,2" Foreground="Gray" TextWrapping="Wrap" Visibility="Collapsed"
+                               Text="The Chauvet Xpress 512 plugged into this PC. One universe, channels 1–512. Close ShowXpress before sending — only one program can use the box."/>
 
                 </Grid>
             </GroupBox>

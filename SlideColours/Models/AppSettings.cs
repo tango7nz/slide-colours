@@ -12,7 +12,7 @@ public class AppSettings
     public int ProPresenterPort { get; set; } = 64194;
 
     // DMX output
-    public string Protocol { get; set; } = "artnet";   // artnet | sacn | enttec
+    public string Protocol { get; set; } = "artnet";   // artnet | sacn | enttec | xpress
     public string TargetIp { get; set; } = "";         // blank = broadcast (Art-Net) / multicast (sACN)
     public int Universe { get; set; } = 0;             // Art-Net universes are 0-based, sACN 1-based
     public string ComPort { get; set; } = "COM3";      // Enttec DMX USB Pro only

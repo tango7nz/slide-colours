@@ -179,8 +179,10 @@ public partial class SettingsWindow : Window
 
     private void UpdateProtocolFields()
     {
-        bool serial = SelectedTag(ProtocolBox) == "enttec";
-        var network = serial ? Visibility.Collapsed : Visibility.Visible;
+        string protocol = SelectedTag(ProtocolBox);
+        bool serial = protocol == "enttec";
+        bool xpress = protocol == "xpress";
+        var network = !serial && !xpress ? Visibility.Visible : Visibility.Collapsed;
         var com = serial ? Visibility.Visible : Visibility.Collapsed;
 
         TargetIpLabel.Visibility = network;
@@ -189,6 +191,7 @@ public partial class SettingsWindow : Window
         UniverseBox.Visibility = network;
         ComPortLabel.Visibility = com;
         ComPortBox.Visibility = com;
+        XpressNote.Visibility = xpress ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RemoteEnabled_Changed(object sender, RoutedEventArgs e)
