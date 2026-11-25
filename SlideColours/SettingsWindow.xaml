@@ -9,9 +9,9 @@
         FontFamily="Segoe UI" FontSize="12">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <!-- Three columns, grouped by what you'd come here to change: what the lights are listening
-         to, the rig they drive, then the app around it. Two columns had grown tall enough to
-         scroll on a laptop, which buries the Save button. -->
+    <!-- Three columns: the lights, what they follow on screen and in the music, then the
+         other programs this one talks to. Two columns had grown tall enough to scroll on a
+         laptop, which buries the Save button. -->
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -25,118 +25,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Column 1: the inputs — where colour and music are picked up from -->
+        <!-- Column 1: the lights, and how the app comes back up -->
         <StackPanel Grid.Row="0" Grid.Column="0">
-
-            <GroupBox Header="ProPresenter" Padding="8">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <Label Grid.Row="0" Grid.Column="0" Content="Host:"/>
-                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="HostBox" Margin="0,2" VerticalContentAlignment="Center"/>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="Port:"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="PortBox" Margin="0,2" VerticalContentAlignment="Center"/>
-
-                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
-                               Text="In ProPresenter: Preferences → Network → Enable Network. Use the port shown there."/>
-                </Grid>
-            </GroupBox>
-
-            <GroupBox Header="Screen capture (Follow screen)" Padding="8" Margin="0,10,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <Label Grid.Row="0" Grid.Column="0" Content="Display:"/>
-                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CaptureDisplayBox" Margin="0,2"
-                              ToolTip="The screen to sample. Pick the one showing the audience/main output."/>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="Smoothing (ms):"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="SmoothingBox" Margin="0,2" VerticalContentAlignment="Center"
-                             ToolTip="How quickly the lights chase the picture. Higher is calmer, lower is snappier."/>
-
-                    <Label Grid.Row="2" Grid.Column="0" Content="Sample rate:"/>
-                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="CaptureFpsBox" Margin="0,2"
-                              ToolTip="Frames per second sampled from the display">
-                        <ComboBoxItem Tag="15" Content="15 per second (lightest)"/>
-                        <ComboBoxItem Tag="30" Content="30 per second (recommended)"/>
-                        <ComboBoxItem Tag="60" Content="60 per second (smoothest)"/>
-                    </ComboBox>
-
-                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
-                               Text="Samples the screen itself, so animated and video backgrounds drive the lights. The display must be connected and awake — it won't capture a projector that's switched off."/>
-                </Grid>
-            </GroupBox>
-
-            <GroupBox Header="Music reaction (Breathe)" Padding="8" Margin="0,10,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="46"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <Label Grid.Row="0" Grid.Column="0" Content="Listen to:"/>
-                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioDeviceBox" Margin="0,2"
-                              SelectionChanged="AudioDevice_Changed"
-                              ToolTip="A line feed from the sound desk is much the best input — you choose what's in it."/>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="Silence below:"/>
-                    <Slider Grid.Row="1" Grid.Column="1" x:Name="AudioGateSlider" Minimum="-80" Maximum="-20"
-                            VerticalAlignment="Center" ValueChanged="AudioGate_Changed"
-                            ToolTip="Anything quieter than this counts as silence. Raise it until talking no longer moves the meter."/>
-                    <TextBlock Grid.Row="1" Grid.Column="2" x:Name="AudioGateValue" VerticalAlignment="Center"
-                               TextAlignment="Right"/>
-
-                    <Label Grid.Row="2" Grid.Column="0" Content="Settle time:"/>
-                    <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioResponseBox" Margin="0,2"
-                              ToolTip="How long the lights take to fall back after a beat. They always rise quickly.">
-                        <ComboBoxItem Tag="250" Content="Snappy (250 ms)"/>
-                        <ComboBoxItem Tag="400" Content="Musical (400 ms) — recommended"/>
-                        <ComboBoxItem Tag="700" Content="Gentle (700 ms)"/>
-                    </ComboBox>
-
-                    <Label Grid.Row="3" Grid.Column="0" Content="Bass level:"/>
-                    <ProgressBar Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioMeter"
-                                 Height="14" Minimum="0" Maximum="100" Margin="0,2"/>
-
-                    <TextBlock Grid.Row="4" Grid.ColumnSpan="3" x:Name="AudioStatusText" Margin="4,6,0,0"
-                               TextWrapping="Wrap"/>
-
-                    <TextBlock Grid.Row="5" Grid.ColumnSpan="3" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
-                               Text="Only the bass is measured, so speech barely registers — but a feed from the desk carrying just the band beats any microphone. Turn breathing on per group in Lights &amp; groups, and save it into a scene so the songs move and the message doesn't."/>
-                </Grid>
-            </GroupBox>
-
-        </StackPanel>
-
-        <!-- Column 2: the rig — where the colour goes, and how it behaves on the way out -->
-        <StackPanel Grid.Row="0" Grid.Column="2">
 
             <GroupBox Header="DMX output" Padding="8">
                 <Grid>
@@ -275,10 +165,120 @@
 
         </StackPanel>
 
-        <!-- Column 3: the app itself — nothing here changes what the lights do -->
+        <!-- Column 2: what the lights follow — the screen, and the music -->
+        <StackPanel Grid.Row="0" Grid.Column="2">
+
+            <GroupBox Header="Screen capture (Follow screen)" Padding="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Display:"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CaptureDisplayBox" Margin="0,2"
+                              ToolTip="The screen to sample. Pick the one showing the audience/main output."/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Smoothing (ms):"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="SmoothingBox" Margin="0,2" VerticalContentAlignment="Center"
+                             ToolTip="How quickly the lights chase the picture. Higher is calmer, lower is snappier."/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Sample rate:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="CaptureFpsBox" Margin="0,2"
+                              ToolTip="Frames per second sampled from the display">
+                        <ComboBoxItem Tag="15" Content="15 per second (lightest)"/>
+                        <ComboBoxItem Tag="30" Content="30 per second (recommended)"/>
+                        <ComboBoxItem Tag="60" Content="60 per second (smoothest)"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="Samples the screen itself, so animated and video backgrounds drive the lights. The display must be connected and awake — it won't capture a projector that's switched off."/>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="Music reaction (Breathe)" Padding="8" Margin="0,10,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="46"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Listen to:"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioDeviceBox" Margin="0,2"
+                              SelectionChanged="AudioDevice_Changed"
+                              ToolTip="A line feed from the sound desk is much the best input — you choose what's in it."/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Silence below:"/>
+                    <Slider Grid.Row="1" Grid.Column="1" x:Name="AudioGateSlider" Minimum="-80" Maximum="-20"
+                            VerticalAlignment="Center" ValueChanged="AudioGate_Changed"
+                            ToolTip="Anything quieter than this counts as silence. Raise it until talking no longer moves the meter."/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" x:Name="AudioGateValue" VerticalAlignment="Center"
+                               TextAlignment="Right"/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Settle time:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioResponseBox" Margin="0,2"
+                              ToolTip="How long the lights take to fall back after a beat. They always rise quickly.">
+                        <ComboBoxItem Tag="250" Content="Snappy (250 ms)"/>
+                        <ComboBoxItem Tag="400" Content="Musical (400 ms) — recommended"/>
+                        <ComboBoxItem Tag="700" Content="Gentle (700 ms)"/>
+                    </ComboBox>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Bass level:"/>
+                    <ProgressBar Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="AudioMeter"
+                                 Height="14" Minimum="0" Maximum="100" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="4" Grid.ColumnSpan="3" x:Name="AudioStatusText" Margin="4,6,0,0"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Grid.Row="5" Grid.ColumnSpan="3" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="Only the bass is measured, so speech barely registers — but a feed from the desk carrying just the band beats any microphone. Turn breathing on per group in Lights &amp; groups, and save it into a scene so the songs move and the message doesn't."/>
+                </Grid>
+            </GroupBox>
+
+        </StackPanel>
+
+        <!-- Column 3: integrations — other programs, updates, and the settings file -->
         <StackPanel Grid.Row="0" Grid.Column="4">
 
-            <GroupBox Header="Remote control (Stream Deck)" Padding="8">
+            <GroupBox Header="ProPresenter" Padding="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Host:"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="HostBox" Margin="0,2" VerticalContentAlignment="Center"/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Port:"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="PortBox" Margin="0,2" VerticalContentAlignment="Center"/>
+
+                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="4,6,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="In ProPresenter: Preferences → Network → Enable Network. Use the port shown there."/>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="Remote control (Stream Deck)" Padding="8" Margin="0,10,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="130"/>
